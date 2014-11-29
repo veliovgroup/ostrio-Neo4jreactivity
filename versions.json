@@ -1,0 +1,27 @@
+{
+  "dependencies": [
+    [
+      "jparker:crypto-core",
+      "0.1.0"
+    ],
+    [
+      "jparker:crypto-sha256",
+      "0.1.1"
+    ],
+    [
+      "meteor",
+      "1.1.3"
+    ],
+    [
+      "ostrio:neo4jdriver",
+      "0.1.11"
+    ],
+    [
+      "underscore",
+      "1.0.1"
+    ]
+  ],
+  "pluginDependencies": [],
+  "toolVersion": "meteor-tool@1.0.35",
+  "format": "1.0"
+}
