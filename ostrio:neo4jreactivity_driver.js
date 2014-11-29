@@ -35,7 +35,7 @@ if (Meteor.isServer) {
   this.N4JDB = new Neo4j();
   neo4j.run = function(uid, query, opts, date, callback) {
     neo4j.check(query);
-    return N4JDB.query(query, opts, function(error, data) {
+    N4JDB.query(query, opts, function(error, data) {
       return Fiber(function() {
         if (callback) {
           callback(error, data);
