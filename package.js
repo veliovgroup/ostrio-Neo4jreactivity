@@ -8,7 +8,7 @@ Package.describe({
 Package.onUse(function(api) {
   api.versionsFrom('1.0');
   api.addFiles(['ostrio:neo4jreactivity_driver.js', 'ostrio:neo4jreactivity_methods.js', 'ostrio:neo4jreactivity_collection.js']);
-  api.use(['jparker:crypto-sha256', 'ostrio:neo4jdriver'])
+  api.use(['jparker:crypto-sha256@0.1.1', 'ostrio:neo4jdriver@0.1.12'])
 });
 
 Npm.depends({
