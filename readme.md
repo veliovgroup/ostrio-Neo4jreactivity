@@ -2,6 +2,13 @@
 All requests is synchronized between all clients, as in real reactivity
 ```neo4j.query``` method returns reactive data source, data from Neo4j database will be in ```object.data``` property, if query has no data it is equals to ```null```
 
+On [atmospherejs.com](https://atmospherejs.com/ostrio/neo4jreactivity)
+
+### Install to meteor
+```
+meteor add ostrio:neo4jreactivity
+```
+
 ### Usage (in helper)
 ```coffeescript
 #CoffeeScript
