@@ -10,9 +10,9 @@ if (Meteor.isServer) {
     },
     remove: function(userId, doc) {
       return false;
-    },
-    fetch: ['owner']
+    }
   });
+  
   Meteor.publish('Neo4jCacheCollection', function() {
     return Neo4jCacheCollection.find({
       created: {

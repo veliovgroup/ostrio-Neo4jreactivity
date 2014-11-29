@@ -1,5 +1,3 @@
-var Fiber;
-
 if (!this.neo4j) {
   this.neo4j = {};
 }
@@ -31,12 +29,12 @@ neo4j.set = {
 };
 
 if (Meteor.isServer) {
-  Fiber = Npm.require("fibers");
+  var Fiber = Meteor.npmRequire("fibers");
   this.N4JDB = new Neo4j();
   neo4j.run = function(uid, query, opts, date, callback) {
     neo4j.check(query);
     N4JDB.query(query, opts, function(error, data) {
-      return Fiber(function() {
+      Fiber(function() {
         if (callback) {
           callback(error, data);
         }
