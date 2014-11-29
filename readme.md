@@ -1,6 +1,6 @@
 **Neo4j reactivity** creates mongodb layer between neo4j and your meteor based application.
 All requests is synchronized between all clients, as in real reactivity
-```neo4j.query``` method returns reactive data source, data from Neo4j database will be in ```object.**data**``` property, if query has no data it is equals to ```null```
+```neo4j.query``` method returns reactive data source, data from Neo4j database will be in ```object.data``` property, if query has no data it is equals to ```null```
 
 ### Usage (in helper)
 ```coffeescript
