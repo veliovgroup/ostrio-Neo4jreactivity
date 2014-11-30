@@ -1,7 +1,7 @@
 Package.describe({
   name: 'ostrio:neo4jreactivity',
   summary: 'Meteor.js Neo4j database pseudo-reactivity layer',
-  version: '0.1.1',
+  version: '0.1.12',
   git: 'https://github.com/VeliovGroup/ostrio-Neo4jreactivity.git'
 });
 

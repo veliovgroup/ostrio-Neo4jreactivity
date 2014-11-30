@@ -35,7 +35,6 @@ if (Meteor.isServer) {
     this.check(query);
     N4JDB.query(query, opts, function(error, data) {
       Fiber(function() {
-
         if (callback) {
           callback(error, data);
         }
@@ -46,7 +45,7 @@ if (Meteor.isServer) {
           data = neo4j.parseReturn(data);
           return neo4j.cache.put(uid, data || null, date);
         }
-        
+
       }).run();
     });
   };
@@ -78,16 +77,24 @@ neo4j.query = function(query, opts, callback) {
   var uid;
   this.check(query);
   uid = CryptoJS.SHA256(query).toString();
-  if (Meteor.isServer) {
-    this.run(uid, query, opts, new Date(), callback);
-  } else {
-    Meteor.call('Neo4jRun', uid, query, opts, new Date(), callback, function(error) {
-      if (error) {
-        throw new Meteor.Error('500', 'Calling method [Neo4jRun]', [error, query, opts, callback].toString());
-        return null;
-      }
-    });
+
+  var cached = Neo4jCacheCollection.findOne({
+    uid: uid
+  });
+
+  if(!cached){
+    if (Meteor.isServer) {
+      this.run(uid, query, opts, new Date(), callback);
+    } else {
+      Meteor.call('Neo4jRun', uid, query, opts, new Date(), callback, function(error) {
+        if (error) {
+          throw new Meteor.Error('500', 'Calling method [Neo4jRun]', [error, query, opts, callback].toString());
+          return null;
+        }
+      });
+    }
   }
+
   return Neo4jCacheCollection.find({
     uid: uid
   });
@@ -142,7 +149,11 @@ neo4j.parseReturn = function(data){
           if (_originals[i].indexOf(".") !== -1) {
             _data[_res[i]].push(result[_res[i]]);
           }else{
-            _data[_res[i]].push(result[_res[i]].data);
+            if(!!result[_res[i]].data && !!result[_res[i]]._data && !!result[_res[i]]._data.metadata)
+              result[_res[i]].data.metadata = result[_res[i]]._data.metadata
+
+            if(!!result[_res[i]].data)
+              _data[_res[i]].push(result[_res[i]].data);
           }
         }
       });
