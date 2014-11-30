@@ -16,9 +16,9 @@ Template.myView.created = ->
     Template.myView.helpers
         graph: () ->
 
-            return neo4j.query 'MATCH (a:User)-[relation:friends]->(b:User)' +
-                        'OPTIONAL MATCH (b:User)-[subrelation:friends]->()' +
-                        'RETURN relation, subrelation', null, (error) ->
+            return neo4j.query 'MATCH (a:User)-[relation:friends]->(b:User) ' +
+                        'OPTIONAL MATCH (b:User)-[subrelation:friends]->()  +
+                        'RETURN relation, subrelation, b._id AS b_id', null, (error) ->
                 if error
                      #handle error here
                      throw new Meteor.error '500', 'Something goes wrong here', error.toString()
@@ -28,9 +28,21 @@ Template.myView.created = ->
 <template name="myView">
 
     {{#each graph}}
-       {{#each data}}
+       {{#each data.relation}}
             <pre>
-                {{relation.property}}, {{subrelation.property}}
+                {{property}}, {{another_property}}
+            </pre>
+        {{/each}}
+
+        {{#each data.subrelation}}
+            <pre>
+                {{property}}, {{another_property}}
+            </pre>
+        {{/each}}
+
+        {{#each data.b_id}}
+            <pre>
+                {{this}}
             </pre>
         {{/each}}
     {{/each}}
@@ -47,7 +59,7 @@ neo4j.set.deny ['SKIP', 'LIMIT']
 
 # default rules
 neo4j.rules = 
-    allow: ['RETURN', 'MATCH', 'SKIP', 'LIMIT', 'OPTIONAL', 'ORDER BY']
+    allow: ['RETURN', 'MATCH', 'SKIP', 'LIMIT', 'OPTIONAL', 'ORDER BY', 'WITH', 'AS']
     deny: ['CREATE', 'UNIQUE', 'MERGE', 'SET', 'DELETE', 'REMOVE', 'FOREACH', 'WHERE', 'ON', 'INDEX', 'USING', 'DROP']
 ```
 
