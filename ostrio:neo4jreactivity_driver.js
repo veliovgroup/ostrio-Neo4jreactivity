@@ -28,11 +28,15 @@ neo4j.set = {
 };
 
 if (Meteor.isServer) {
+
   var Fiber = Meteor.npmRequire("fibers");
   this.N4JDB = new Neo4j();
+
   neo4j.run = function(uid, query, opts, date, callback) {
+
     this.queryString = query;
     this.check(query);
+
     N4JDB.query(query, opts, function(error, data) {
       Fiber(function() {
         if (callback) {
@@ -49,9 +53,11 @@ if (Meteor.isServer) {
       }).run();
     });
   };
+  
   if (!neo4j.cache) {
     neo4j.cache = {};
   }
+
   neo4j.cache.put = function(uid, data, date) {
     return Neo4jCacheCollection.upsert({
       uid: uid
@@ -65,6 +71,7 @@ if (Meteor.isServer) {
       }
     });
   };
+
   neo4j.cache.get = function(uid) {
     return Neo4jCacheCollection.find({
       uid: uid
@@ -151,6 +158,16 @@ neo4j.parseReturn = function(data){
           }else{
             if(!!result[_res[i]].data && !!result[_res[i]]._data && !!result[_res[i]]._data.metadata)
               result[_res[i]].data.metadata = result[_res[i]]._data.metadata
+
+            if(!!result[_res[i]]._data && !!result[_res[i]]._data.start && !!result[_res[i]]._data.end && !!result[_res[i]]._data.type)
+              
+              result[_res[i]].data.relation = {
+                extensions  : result[_res[i]]._data.extensions,
+                start : _.last(result[_res[i]]._data.start.split('/')),
+                end   : _.last(result[_res[i]]._data.end.split('/')),
+                self  : _.last(result[_res[i]]._data.self.split('/')),
+                type  : result[_res[i]]._data.type
+              };
 
             if(!!result[_res[i]].data)
               _data[_res[i]].push(result[_res[i]].data);
