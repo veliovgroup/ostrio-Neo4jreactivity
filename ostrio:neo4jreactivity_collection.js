@@ -12,11 +12,11 @@ if (Meteor.isServer) {
       return false;
     }
   });
-  
+
   Meteor.publish('Neo4jCacheCollection', function() {
     return Neo4jCacheCollection.find({
       created: {
-        $gte: new Date(new Date() - 5 * 60000)
+        $gte: new Date(new Date() - 24 * 60 * 60000)
       }
     });
   });
