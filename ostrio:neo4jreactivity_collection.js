@@ -1,3 +1,11 @@
+if (!this.neo4j) {
+  this.neo4j = {};
+}
+
+if (!this.neo4j.uids) {
+  this.neo4j.uids = (Meteor.isServer) ? [] : Session.set('neo4juids', []);
+}
+
 this.Neo4jCacheCollection = new Meteor.Collection('Neo4jCache');
 
 if (Meteor.isServer) {
@@ -13,8 +21,13 @@ if (Meteor.isServer) {
     }
   });
 
-  Meteor.publish('Neo4jCacheCollection', function() {
-    return Neo4jCacheCollection.find({
+  Meteor.publish('Neo4jCacheCollection', function(uids) {
+
+    return Neo4jCacheCollection.find(
+    {
+      uid: {
+        '$in': uids
+      },
       created: {
         $gte: new Date(new Date() - 24 * 60 * 60000)
       }
@@ -23,6 +36,8 @@ if (Meteor.isServer) {
 }
 
 if (Meteor.isClient) {
-  Meteor.subscribe('Neo4jCacheCollection');
+  Tracker.autorun(function(){
+    return Meteor.subscribe('Neo4jCacheCollection', Session.get('neo4juids'));
+  });
 }
 

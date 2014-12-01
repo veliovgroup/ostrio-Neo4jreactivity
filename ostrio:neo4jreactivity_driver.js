@@ -2,6 +2,15 @@ if (!this.neo4j) {
   this.neo4j = {};
 }
 
+if (!this.neo4j.uids) {
+  if(Meteor.isClient){
+    Session.setDefault('neo4juids', [null]);
+  }
+
+  this.neo4j.uids = (Meteor.isServer) ? [] : Session.get('neo4juids');
+}
+
+
 neo4j.rules = {
   allow: ['RETURN', 'MATCH', 'SKIP', 'LIMIT', 'OPTIONAL', 'ORDER BY', 'WITH', 'AS', 'WHERE'],
   deny: ['CREATE', 'UNIQUE', 'MERGE', 'SET', 'DELETE', 'REMOVE', 'FOREACH', 'ON', 'INDEX', 'USING', 'DROP']
@@ -37,6 +46,8 @@ if (Meteor.isServer) {
     this.queryString = query;
     this.check(query);
 
+    this.uids = _.union(this.uids, [uid]);
+
     N4JDB.query(query, opts, function(error, data) {
       Fiber(function() {
         if (callback) {
@@ -53,7 +64,7 @@ if (Meteor.isServer) {
       }).run();
     });
   };
-  
+
   if (!neo4j.cache) {
     neo4j.cache = {};
   }
@@ -84,6 +95,8 @@ neo4j.query = function(query, opts, callback) {
   var uid;
   this.check(query);
   uid = CryptoJS.SHA256(query).toString();
+
+  Session.set('neo4juids', _.union(Session.get('neo4juids'), [uid]));
 
   var cached = Neo4jCacheCollection.findOne({
     uid: uid
