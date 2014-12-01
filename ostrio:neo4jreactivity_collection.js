@@ -3,7 +3,11 @@ if (!this.neo4j) {
 }
 
 if (!this.neo4j.uids) {
-  this.neo4j.uids = (Meteor.isServer) ? [] : Session.set('neo4juids', []);
+  if(Meteor.isClient){
+    Session.setDefault('neo4juids', [null]);
+  }
+
+  this.neo4j.uids = (Meteor.isServer) ? [] : Session.get('neo4juids');
 }
 
 this.Neo4jCacheCollection = new Meteor.Collection('Neo4jCache');
