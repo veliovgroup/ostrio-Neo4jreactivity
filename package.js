@@ -11,7 +11,7 @@ Package.onUse(function(api) {
   api.use('underscore', ['client', 'server']);
   api.use('tracker', 'client');
   api.use('session', 'client');
-  api.use(['jparker:crypto-sha256@0.1.1', 'ostrio:neo4jdriver@0.1.13'])
+  api.use('ostrio:neo4jdriver@0.1.13')
 });
 
 Npm.depends({

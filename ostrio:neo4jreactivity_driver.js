@@ -232,7 +232,7 @@ neo4j.query = function(query, opts, callback) {
 
   this.queryString = query;
   this.check(query);
-  var uid = CryptoJS.SHA256(query).toString();
+  var uid = Package.sha.SHA256(query);
   Session.set('neo4juids', _.union(Session.get('neo4juids'), [uid]));
 
   var cached = Neo4jCacheCollection.find({
