@@ -31,9 +31,6 @@ if (Meteor.isServer) {
     {
       uid: {
         '$in': uids
-      },
-      created: {
-        $gte: new Date(new Date() - 24 * 60 * 60000)
       }
     });
   });

@@ -1,7 +1,7 @@
 Package.describe({
   name: 'ostrio:neo4jreactivity',
   summary: 'Meteor.js Neo4j database pseudo-reactivity layer',
-  version: '0.1.13',
+  version: '0.2.1',
   git: 'https://github.com/VeliovGroup/ostrio-Neo4jreactivity.git'
 });
 
@@ -11,7 +11,7 @@ Package.onUse(function(api) {
   api.use('underscore', ['client', 'server']);
   api.use('tracker', 'client');
   api.use('session', 'client');
-  api.use(['jparker:crypto-sha256@0.1.1', 'ostrio:neo4jdriver@0.1.13'])
+  api.use('ostrio:neo4jdriver@0.1.13')
 });
 
 Npm.depends({
