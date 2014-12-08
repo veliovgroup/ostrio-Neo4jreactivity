@@ -25,7 +25,7 @@ meteor add ostrio:neo4jreactivity
 neo4j.methods 
     getUsersFriends: () ->
         return  'MATCH (a:User {_id: {userId}})-[relation:friends]->(b:User) ' +
-                'OPTIONAL MATCH (b:User)-[subrelation:friends]->()  +
+                'OPTIONAL MATCH (b:User)-[subrelation:friends]->() ' +
                 'RETURN relation, subrelation, b._id AS b_id, b'
 
 #In Helper
