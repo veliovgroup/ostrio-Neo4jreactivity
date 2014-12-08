@@ -1,6 +1,8 @@
 **Neo4j reactivity** creates mongodb layer between neo4j and your meteor based application.
-All requests is synchronized between all clients, as in real reactivity
-```neo4j.call``` method returns reactive data source the ```ReactveVar```, so data from Neo4j database is available from ```.get()``` method, if query has no data it is equals to ```null```
+
+All requests is synchronized between all clients, as in real reactivity.
+
+```neo4j.call``` method returns reactive data source - ```ReactveVar```, so data from Neo4j database is available from ```.get()``` method, if query has no data it is equals to ```null```
 
 On [atmospherejs.com](https://atmospherejs.com/ostrio/neo4jreactivity)
 
@@ -52,6 +54,14 @@ Template.friendsNamesList.helpers
 ```
 
 ### About security
+By default query execution is allowed only on server, but for development purpose (or any other), you may enable it on client:
+```coffeescript
+#Write this line in /lib/ directory to execute this code on both client and server side
+neo4j.allowClientQuery = true
+#Do not forget about minimum security, deny all write queries
+neo4j.set.deny neo4j.rules.write
+```
+
 To allow or deny actions use ```neo4j.set.allow(['array of strings'])``` and ```neo4j.set.deny(['array of strings'])```
 ```coffeescript
 #CoffeeScript
@@ -62,10 +72,27 @@ neo4j.set.deny ['SKIP', 'LIMIT']
 neo4j.set.allow '*'
 neo4j.set.deny '*'
 
+#To deny all write operators
+neo4j.set.deny neo4j.rules.write
+
 # default rules
 neo4j.rules = 
     allow: ['RETURN', 'MATCH', 'SKIP', 'LIMIT', 'OPTIONAL', 'ORDER BY', 'WITH', 'AS', 'WHERE', 'CONSTRAINT', 'UNWIND', 'DISTINCT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'CREATE', 'UNIQUE', 'MERGE', 'SET', 'DELETE', 'REMOVE', 'FOREACH', 'ON', 'INDEX', 'USING', 'DROP']
     deny: []
+```
+
+### Execute query on client side:
+```coffeescript
+#Write this line in /lib/ directory to execute this code on both client and server side
+neo4j.allowClientQuery = true
+
+#Client code
+getAllUsers = () ->
+    neo4j.query('MATCH (a:User) RETURN a', null, function(err, data){
+       Session.set('allUsers', data.get());
+    });
+
+    return Session.get('allUsers');
 ```
 
 **For more info see: [neo4jdriver](https://github.com/VeliovGroup/ostrio-neo4jdriver) and [node-neo4j](https://github.com/thingdom/node-neo4j)**
