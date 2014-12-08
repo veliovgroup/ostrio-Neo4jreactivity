@@ -32,7 +32,7 @@ neo4j.methods
 Template.friendsNamesList.helpers
     userFriends: () ->
 
-        neo4j.call 'getUsersFriends', {_id: '12345'}, (error, record) ->
+        neo4j.call 'getUsersFriends', {userId: '12345'}, (error, record) ->
             if error
                  #handle error here
                  throw new Meteor.error '500', 'Something goes wrong here', error.toString()
