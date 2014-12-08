@@ -14,13 +14,13 @@ this.Neo4jCacheCollection = new Meteor.Collection('Neo4jCache');
 
 if (Meteor.isServer) {
   Neo4jCacheCollection.allow({
-    insert: function(userId, doc) {
-      return doc.lastModified = doc.created = new Date();
+    insert: function() {
+      return false
     },
-    update: function(userId, doc) {
+    update: function() {
       return false;
     },
-    remove: function(userId, doc) {
+    remove: function() {
       return false;
     }
   });
