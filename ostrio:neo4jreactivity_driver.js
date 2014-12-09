@@ -164,6 +164,25 @@ neo4j.set = {
  *
  * @function
  * @namespace neo4j
+ * @name mapParameters
+ * @param query {string}      - Cypher query
+ * @param opts {object}       - A map of parameters for the Cypher query
+ * 
+ * @description Isomorphic mapParameters for neo4j query
+ * @returns {string} - query with replaced map of parameters
+ *
+ */
+neo4j.mapParameters = function(query, opts){
+  _.forEach(opts, function(value, key){
+    query = query.replace('{' + key + '}', '"' + value + '"').replace('{ ' + key + ' }', '"' + value + '"');
+  });
+  return query;
+}
+
+/*
+ *
+ * @function
+ * @namespace neo4j
  * @name query
  * @param query {string}      - Cypher query
  * @param opts {object}       - A map of parameters for the Cypher query
@@ -177,6 +196,11 @@ neo4j.set = {
  *
  */
 neo4j.query = function(query, opts, callback, settings) {
+  if(opts){
+    query = this.mapParameters(query, opts);
+    opts = null;
+  }
+
   this.check(query);
   var uid = Package.sha.SHA256(query);
 
@@ -522,9 +546,14 @@ if (Meteor.isServer) {
     var _methods = {};
 
     _.forEach(methods, function(query, methodName){
-      var uid = Package.sha.SHA256(query());
       _methods[methodName] = function(opts, callback){
-        neo4j.query(query(), opts);
+        var _query = query();
+        if(opts){
+          _query = neo4j.mapParameters(_query, opts);
+          opts = null;
+        }
+        var uid = Package.sha.SHA256(_query);
+        neo4j.query(_query, opts);
 
         return uid;
       }
