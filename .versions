@@ -1,0 +1,11 @@
+base64@1.0.2
+ejson@1.0.5
+json@1.0.2
+meteor@1.1.4
+ostrio:neo4jdriver@0.2.4
+ostrio:neo4jreactivity@0.4.0
+reactive-dict@1.0.5
+session@1.0.5
+sha@1.0.2
+tracker@1.0.4
+underscore@1.0.2

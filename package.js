@@ -13,7 +13,6 @@ Package.onUse(function(api) {
   api.use('session', 'client');
   api.use('sha', ['client', 'server']);
   api.use('ostrio:neo4jdriver@0.2.4');
-  api.use('npm-container@1.0.0');
 });
 
 Npm.depends({
