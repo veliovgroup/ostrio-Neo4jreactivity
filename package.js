@@ -11,7 +11,7 @@ Package.onUse(function(api) {
   api.use('underscore', ['client', 'server']);
   api.use('tracker', 'client');
   api.use('session', 'client');
-  api.use('ReactiveVar', 'client');
+  api.use('reactive-var', 'client');
   api.use('sha', ['client', 'server']);
   api.use('ostrio:neo4jdriver@0.2.5');
   api.use('meteorhacks:npm@1.2.2');
