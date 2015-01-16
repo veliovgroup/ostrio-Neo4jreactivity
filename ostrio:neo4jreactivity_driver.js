@@ -1,3 +1,15 @@
+/*jshint strict:false */
+/*global neo4j:false */
+/*global N4JDB:false */
+/*global Meteor:false */
+/*global _:false */
+/*global Session:false */
+/*global Package:false */
+/*global Neo4jCacheCollection:false */
+/*global ReactiveVar:false */
+/*global Tracker:false */
+/*global Neo4j:false */
+
 /*
  *
  * @object
@@ -27,7 +39,7 @@ if (!neo4j.cache) {
  *
  */
 if (!neo4j.allowClientQuery){
-  neo4j.allowClientQuery = false
+  neo4j.allowClientQuery = false;
 }
 
 /*
@@ -72,7 +84,7 @@ neo4j.search = function(regexp, string, callback){
 neo4j.check = function(query) {
   var _n;
   _.forEach(this.rules.deny, function(value) {
-    _n = new RegExp(value + ' ', "i");
+    _n = new RegExp(value + ' ', 'i');
     neo4j.search(_n, query, function(isFound){
       if (isFound) throw new Meteor.Error('401', '[neo4j.check] "' + value + '" is not allowed!', query);
     });
@@ -174,10 +186,11 @@ neo4j.set = {
  */
 neo4j.mapParameters = function(query, opts){
   _.forEach(opts, function(value, key){
-    query = query.replace('{' + key + '}', '"' + value + '"').replace('{ ' + key + ' }', '"' + value + '"');
+    value = (!isNaN(value)) ? value : '"' + value + '"';
+    query = query.replace('{' + key + '}', value).replace('{ ' + key + ' }', value);
   });
   return query;
-}
+};
 
 /*
  *
@@ -203,12 +216,12 @@ neo4j.query = function(query, opts, callback, settings) {
 
   this.check(query);
   var uid = Package.sha.SHA256(query);
-
+  
   var cached = Neo4jCacheCollection.find({
     uid: uid
   });
 
-  if(cached.fetch().length === 0){
+  if(cached.fetch().length === 0 || this.isWrite(query)){
     if(Meteor.isServer){
       this.run(uid, query, opts, new Date());
     }else if(neo4j.allowClientQuery === true && Meteor.isClient){
@@ -227,8 +240,42 @@ neo4j.query = function(query, opts, callback, settings) {
     }else{
       return neo4j.cache.get(uid, settings);
     }
+  }else{
+    return neo4j.cache.get(uid, settings);
   }
 };
+
+
+/*
+ *
+ * @function
+ * @namespace neo4j
+ * @name isWrite
+ * @param query {string} - Cypher query
+ * @description Returns true if `query` writing/changing/removing data
+ * @returns {boolean}
+ *
+ */
+neo4j.isWrite = function(query){
+  var _n = new RegExp('(' + neo4j.rules.write.join('|') + '*)', 'gi');
+  return neo4j.search(_n, query);
+};
+
+/*
+ *
+ * @function
+ * @namespace neo4j
+ * @name isRead
+ * @param query {string} - Cypher query
+ * @description Returns true if `query` only reading
+ * @returns {boolean}
+ *
+ */
+neo4j.isRead = function(query){
+  var _n = new RegExp('(' + neo4j.rules.write.join('|') + '*)', 'gi');
+  return !neo4j.search(_n, query);
+};
+
 
 
 if(Meteor.isClient){
@@ -245,18 +292,18 @@ if(Meteor.isClient){
    *
    */
   neo4j.cache.get = function(uid, settings) {
-    var cached = new ReactiveVar();
-
     if(!settings){
       settings = {
         returnCursor: false
       };
     }
 
+    var cached = new ReactiveVar();
+    
     Tracker.autorun(function(){
 
       if(settings.returnCursor === true){
-        cached.set(Neo4jCacheCollection.find({uid: uid}))
+        cached.set(Neo4jCacheCollection.find({uid: uid}));
       }else{
         var cache = Neo4jCacheCollection.find({uid: uid});
 
@@ -270,8 +317,10 @@ if(Meteor.isClient){
         }
       }
     });
+
     return cached;
   };
+
 
   /*
    *
@@ -309,11 +358,11 @@ if(Meteor.isClient){
 
 if (Meteor.isServer) {
 
-  var Fiber = Meteor.npmRequire("fibers");
+  var Fiber = Meteor.npmRequire('fibers');
   /*
    * @description Connect to neo4j database, returns GraphDatabase object
    */
-  this.N4JDB = new Neo4j()
+  this.N4JDB = new Neo4j();
 
   /*
    *
@@ -325,9 +374,7 @@ if (Meteor.isServer) {
    *
    */
   N4JDB.listen(function(query, opts){
-
     if(neo4j.isWrite(query)){
-
       var sensitivities = neo4j.parseSensitivities(query, opts);
       if(sensitivities){
         var affectedRecords = Neo4jCacheCollection.find({
@@ -365,12 +412,46 @@ if (Meteor.isServer) {
     N4JDB.query(query, opts, function(error, data) {
       Fiber(function() {
         if (error) {
-          throw new Meteor.Error('500', 'N4JDB.query: [neo4j.run]', [error, uid, query, opts, date].toString());
+          throw new Meteor.Error('500', 'N4JDB.query: [neo4j.run]: ' + [error, uid, query, opts, date].toString());
         } else {
           return neo4j.cache.put(uid, data || null, query, opts, date);
         }
       }).run();
     });
+  };
+
+  /*
+   *
+   * @function
+   * @namespace neo4j.cache
+   * @name get
+   * @param uid {string}      - Unique hashed ID of the query
+   * @param settings {object} - {returnCursor: boolean} if set to true, returns Mongo.cursor 
+   * @description Get cached response by UID
+   * @returns Mongo\Cursor or fetched data (string|array)
+   *
+   */
+  neo4j.cache.get = function(uid, settings) {
+    if(!settings){
+      settings = {
+        returnCursor: false
+      };
+    }
+
+    if(settings.returnCursor === true){
+      return Neo4jCacheCollection.find({uid: uid});
+    }else{
+      var cache = Neo4jCacheCollection.find({uid: uid});
+
+      if(cache.fetch()){
+        var c = cache.fetch();
+        if(c[0] && c[0].data){
+          return c[0].data;
+        }else{
+          return null;
+        }
+      }
+    }
   };
 
   /*
@@ -418,21 +499,29 @@ if (Meteor.isServer) {
     var i,
         _res,
         _data = data,
-        _n = new RegExp('return ', "i");
+        _originals = [],
+        _clauses,
+        wait,
+        _n = new RegExp('return ', 'i');
 
-    var wait = this.search(_n, queryString, function(isFound){
+    wait = this.search(_n, queryString, function(isFound){
       if(isFound){
-        _data = {},
-        _originals = [];
-        _res = queryString.replace(/.*return /i,"").trim();
+        _data = {};
+        _res = queryString.replace(/.*return /i,'').trim();
         _res = _res.split(',');
+
+        _clauses = _.last(_res);
+        if(_clauses.indexOf(' ') !== -1){
+          var _clause = _.first(_clauses.split(' '));
+          _res[_res.length - 1] = _clause;
+        }
 
         for (i in _res){
           _res[i] = _res[i].trim();
           _originals[i] = _res[i];
 
 
-          if(_res[i].indexOf(" ") !== -1){
+          if(_res[i].indexOf(' ') !== -1){
             _res[i] = _.last(_res[i].split(' '));
             _originals[i] = _.first(_res[i].split(' '));
           }
@@ -443,11 +532,11 @@ if (Meteor.isServer) {
         data.map(function (result) {
           for (i in _res){
             if(!!result[_res[i]]){
-              if (_originals[i].indexOf(".") !== -1) {
+              if (_originals[i].indexOf('.') !== -1) {
                 _data[_res[i]].push(result[_res[i]]);
               }else{
                 if(!!result[_res[i]].data && !!result[_res[i]]._data && !!result[_res[i]]._data.metadata)
-                  result[_res[i]].data.metadata = result[_res[i]]._data.metadata
+                  result[_res[i]].data.metadata = result[_res[i]]._data.metadata;
 
                 if(!!result[_res[i]]._data && !!result[_res[i]]._data.start && !!result[_res[i]]._data.end && !!result[_res[i]]._data.type)
                   
@@ -484,11 +573,11 @@ if (Meteor.isServer) {
    *
    */
   neo4j.parseSensitivities = function(query, opts){
-    var _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'/gi);
+    var _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'|:(\w*)/gi);
     var matches, result = [];
     while(matches = _n.exec(query)){ 
       if(matches[0]){
-        result.push(matches[0].replace(/["']/gi, ""));
+        result.push(matches[0].replace(/["']/gi, ''));
       }
     }
 
@@ -506,36 +595,6 @@ if (Meteor.isServer) {
    *
    * @function
    * @namespace neo4j
-   * @name isWrite
-   * @param query {string} - Cypher query
-   * @description Returns true if `query` writing/changing/removing data
-   * @returns {boolean}
-   *
-   */
-  neo4j.isWrite = function(query){
-    var _n = new RegExp("(" + neo4j.rules.write.join('|') + "*)", "gi");
-    return neo4j.search(_n, query)
-  };
-
-  /*
-   *
-   * @function
-   * @namespace neo4j
-   * @name isRead
-   * @param query {string} - Cypher query
-   * @description Returns true if `query` only reading
-   * @returns {boolean}
-   *
-   */
-  neo4j.isRead = function(query){
-    var _n = new RegExp("(" + neo4j.rules.write.join('|') + "*)", "gi");
-    return !neo4j.search(_n, query)
-  };
-
-  /*
-   *
-   * @function
-   * @namespace neo4j
    * @name methods
    * @param methods {object} - Object of methods, like: { methodName: function(){ return 'MATCH (a:User {name: {userName}}) RETURN a' } }
    * @description Create server methods to send query to neo4j database
@@ -546,7 +605,7 @@ if (Meteor.isServer) {
     var _methods = {};
 
     _.forEach(methods, function(query, methodName){
-      _methods[methodName] = function(opts, callback){
+      _methods[methodName] = function(opts){
         var _query = query();
         if(opts){
           _query = neo4j.mapParameters(_query, opts);
@@ -556,7 +615,7 @@ if (Meteor.isServer) {
         neo4j.query(_query, opts);
 
         return uid;
-      }
+      };
     });
     Meteor.methods(_methods);
   };

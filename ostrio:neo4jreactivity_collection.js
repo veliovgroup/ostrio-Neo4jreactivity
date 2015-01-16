@@ -1,3 +1,9 @@
+/*jshint strict:false */
+/*global Meteor:false */
+/*global Session:false */
+/*global Neo4jCacheCollection:false */
+/*global Tracker:false */
+
 if (!this.neo4j) {
   this.neo4j = {};
 }
@@ -15,7 +21,7 @@ this.Neo4jCacheCollection = new Meteor.Collection('Neo4jCache');
 if (Meteor.isServer) {
   Neo4jCacheCollection.allow({
     insert: function() {
-      return false
+      return false;
     },
     update: function() {
       return false;
