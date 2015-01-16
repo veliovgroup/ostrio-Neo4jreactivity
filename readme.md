@@ -6,6 +6,9 @@ All requests is synchronized between all clients, as in real reactivity.
 
 On [atmospherejs.com](https://atmospherejs.com/ostrio/neo4jreactivity)
 
+### Example App
+The basic example is build on top of `--example leaderboard]` - the [Meteor Leaderboard Neo4j Example App](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j) 
+
 ### Description
 Due to security lack we decide separate server side with queries, and client side with handlers via methods.
 
