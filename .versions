@@ -5,7 +5,7 @@ meteor@1.1.4
 meteorhacks:async@1.0.0
 meteorhacks:npm@1.2.2
 ostrio:neo4jdriver@0.2.5
-ostrio:neo4jreactivity@0.4.2
+ostrio:neo4jreactivity@0.4.3
 reactive-dict@1.0.5
 reactive-var@1.0.4
 session@1.0.5

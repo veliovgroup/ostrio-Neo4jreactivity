@@ -160,7 +160,7 @@ neo4j.allowClientQuery = true; /* Allow/deny client query executions */
 neo4j.connectionURL = null; /* Set custom connection URL to Neo4j DB, Note: It’s better to store url in environment variable, 'NEO4J_URL' or 'GRAPHENEDB_URL' - so it will be automatically picked up by the driver */
 ```
 
-`neo4j` object has multiply functions, you will use:
+`neo4j` object has multiple functions, you will use:
 ```javascript
 /* @namespace neo4j.set
  * @name allow
