@@ -44,6 +44,16 @@ if (!neo4j.allowClientQuery){
 
 /*
  *
+ * @property connectionURL {string} - url to Neo4j database
+ * @description Set connection URL to Neo4j Database
+ *
+ */
+if (!neo4j.connectionURL){
+  neo4j.connectionURL = null;
+}
+
+/*
+ *
  * @description Create neo4juids Session
  *
  */
@@ -362,7 +372,7 @@ if (Meteor.isServer) {
   /*
    * @description Connect to neo4j database, returns GraphDatabase object
    */
-  this.N4JDB = new Neo4j();
+  this.N4JDB = new Neo4j(neo4j.connectionURL);
 
   /*
    *
