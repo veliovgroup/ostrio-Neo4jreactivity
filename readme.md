@@ -17,7 +17,7 @@ meteor add ostrio:neo4jreactivity
 ```
 
 ##### Usage example:
-##### In Server Methods
+###### In Server Methods
 ```coffeescript
 #CoffeeScript
 neo4j.methods 
