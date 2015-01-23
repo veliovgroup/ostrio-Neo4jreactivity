@@ -7,9 +7,9 @@ The basic example is build on top of `--example leaderboard` - the [Meteor Leade
 ##### Description
 Due to security lack we decide separate server side with queries, and client side with handlers via methods.
 
-To create method use ```neo4j.methods({'object of functions'})``` with functions which returns query string (see example below).
+To create method use ```Meteor.neo4j.methods({'object of functions'})``` with functions which returns query string (see example below).
 
-To call and handle database answer use: ```neo4j.call('methodName', {'A map of parameters for the Cypher query'}, function(error, data){...})```, to get reactive data call: ```get()``` method on data returned from Neo4j database, like: ```data.get()```
+To call and handle database answer use: ```Meteor.neo4j.call('methodName', {'A map of parameters for the Cypher query'}, function(error, data){...})```, to get reactive data call: ```get()``` method on data returned from Neo4j database, like: ```data.get()```
 
 ##### Install the driver
 ```
@@ -17,10 +17,10 @@ meteor add ostrio:neo4jreactivity
 ```
 
 ##### Usage example:
-##### In Server Methods
+###### In Server Methods
 ```coffeescript
 #CoffeeScript
-neo4j.methods 
+Meteor.neo4j.methods 
     getUsersFriends: () ->
         return  'MATCH (a:User {_id: {userId}})-[relation:friends]->(b:User) ' +
                 'OPTIONAL MATCH (b:User)-[subrelation:friends]->() ' +
@@ -33,7 +33,7 @@ neo4j.methods
 Template.friendsNamesList.helpers
     userFriends: () ->
 
-        neo4j.call 'getUsersFriends', {userId: '12345'}, (error, record) ->
+        Meteor.neo4j.call 'getUsersFriends', {userId: '12345'}, (error, record) ->
             if error
                  #handle error here
                  throw new Meteor.error '500', 'Something goes wrong here', error.toString()
@@ -58,26 +58,26 @@ Template.friendsNamesList.helpers
 By default query execution is allowed only on server, but for development purpose (or any other), you may enable it on client:
 ```coffeescript
 #Write this line in /lib/ directory to execute this code on both client and server side
-neo4j.allowClientQuery = true
+Meteor.neo4j.allowClientQuery = true
 #Do not forget about minimum security, deny all write queries
-neo4j.set.deny neo4j.rules.write
+Meteor.neo4j.set.deny Meteor.neo4j.rules.write
 ```
 
 To allow or deny actions use ```neo4j.set.allow(['array of strings'])``` and ```neo4j.set.deny(['array of strings'])```
 ```coffeescript
 #CoffeeScript
-neo4j.set.allow ['create', 'Remove']
-neo4j.set.deny ['SKIP', 'LIMIT']
+Meteor.neo4j.set.allow ['create', 'Remove']
+Meteor.neo4j.set.deny ['SKIP', 'LIMIT']
 
 #OR to allow or deny all
-neo4j.set.allow '*'
-neo4j.set.deny '*'
+Meteor.neo4j.set.allow '*'
+Meteor.neo4j.set.deny '*'
 
 #To deny all write operators
-neo4j.set.deny neo4j.rules.write
+Meteor.neo4j.set.deny Meteor.neo4j.rules.write
 
 #default rules
-neo4j.rules = 
+Meteor.neo4j.rules = 
     allow: ['RETURN', 'MATCH', 'SKIP', 'LIMIT', 'OPTIONAL', 'ORDER BY', 'WITH', 'AS', 'WHERE', 'CONSTRAINT', 'UNWIND', 'DISTINCT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'CREATE', 'UNIQUE', 'MERGE', 'SET', 'DELETE', 'REMOVE', 'FOREACH', 'ON', 'INDEX', 'USING', 'DROP']
     deny: []
 ```
@@ -85,15 +85,11 @@ neo4j.rules =
 ##### Execute query on client side:
 ```coffeescript
 #Write this line in /lib/ directory to execute this code on both client and server side
-neo4j.allowClientQuery = true
+Meteor.neo4j.allowClientQuery = true
 
 #Client code
 getAllUsers = () ->
-    neo4j.query('MATCH (a:User) RETURN a', null, function(err, data){
-       Session.set('allUsers', data.get());
-    });
-
-    return Session.get('allUsers');
+    return Session.get('allUsers', Meteor.neo4j.query('MATCH (a:User) RETURN a'));
 ```
 
 **For more info see: [neo4jdriver](https://github.com/VeliovGroup/ostrio-neo4jdriver) and [node-neo4j](https://github.com/thingdom/node-neo4j)**
@@ -115,9 +111,9 @@ Code licensed under Apache v. 2.0: [node-neo4j License](https://github.com/thing
 
 ##### Understanding the package
 After installing `ostrio:neo4jreactivity` package - you will have next variables:
- - `Neo4j;`
- - `N4JDB;`
- - `neo4j;`
+ - `Meteor.Neo4j;`
+ - `Meteor.N4JDB;`
+ - `Meteor.neo4j;`
 
 ###### var Neo4j;
 ```javascript
@@ -138,12 +134,12 @@ var N4JDB = new Neo4j();
 Newly created object has next functions, you will use:
 ```javascript
 /* @name query */
-N4JDB.query('MATCH (n:User) RETURN n', opts /* A map of parameters for the Cypher query */, function(err, data){
+Meteor.N4JDB.query('MATCH (n:User) RETURN n', opts /* A map of parameters for the Cypher query */, function(err, data){
     Session.set('allUsers', data);
 });
 
 /* @name listen */
-N4JDB.listen(function(query, opts){
+Meteor.N4JDB.listen(function(query, opts){
     console.log('Incoming request to neo4j database detected!');
 });
 ```
@@ -155,9 +151,9 @@ N4JDB.listen(function(query, opts){
  * @name neo4j
  * @description Application wide object neo4j
  */
-neo4j;
-neo4j.allowClientQuery = true; /* Allow/deny client query executions */
-neo4j.connectionURL = null; /* Set custom connection URL to Neo4j DB, Note: It’s better to store url in environment variable, 'NEO4J_URL' or 'GRAPHENEDB_URL' - so it will be automatically picked up by the driver */
+Meteor.neo4j;
+Meteor.neo4j.allowClientQuery = true; /* Allow/deny client query executions */
+Meteor.neo4j.connectionURL = null; /* Set custom connection URL to Neo4j DB, Note: It’s better to store url in environment variable, 'NEO4J_URL' or 'GRAPHENEDB_URL' - so it will be automatically picked up by the driver */
 ```
 
 `neo4j` object has multiple functions, you will use:
@@ -166,13 +162,13 @@ neo4j.connectionURL = null; /* Set custom connection URL to Neo4j DB, Note: It�
  * @name allow
  * @param rules {array} - Array of Cypher operators to be allowed in app
  */
-neo4j.set.allow(rules /* array of strings */);
+Meteor.neo4j.set.allow(rules /* array of strings */);
 
 /* @namespace neo4j.set
  * @name deny
  * @param rules {array} - Array of Cypher operators to be forbidden in app
  */
-neo4j.set.deny(rules /* array of strings */);
+Meteor.neo4j.set.deny(rules /* array of strings */);
 
 
 /*
@@ -192,14 +188,8 @@ neo4j.set.deny(rules /* array of strings */);
  * @note Please keep in mind what on client it returns ReactiveVar, but on server it returns just data, see difference in usage at example below
  *
  */
-allUsers = neo4j.query('MATCH (n:User) RETURN n');
-
-if(Meteor.isClient && allUsers.get()){
-  var users = allUsers.get().a;
-}
-if(Meteor.isServer && allUsers){
-  var users = allUsers.a;
-}
+allUsers = Meteor.neo4j.query('MATCH (users:User) RETURN users');
+var users = allUsers.get().users;
 
 
 /*
@@ -208,9 +198,9 @@ if(Meteor.isServer && allUsers){
  * @param methods {object} - Object of methods, like: { methodName: function(){ return 'MATCH (a:User {name: {userName}}) RETURN a' } }
  * @description Create server methods to send query to neo4j database
  */
-neo4j.methods({
+Meteor.neo4j.methods({
    'GetAllUsers': function(){
-      return 'MATCH (n:User) RETURN n';
+      return 'MATCH (users:User) RETURN users';
    }
 });
 
@@ -221,8 +211,8 @@ neo4j.methods({
  * @description Call for server method registered via neo4j.methods() method, 
  *              returns error, data via callback.
  */
-neo4j.call('GetAllUsers', null, function(error, data){
-   Session.set('AllUsers', data.get());
+Meteor.neo4j.call('GetAllUsers', null, function(error, data){
+   Session.set('AllUsers', data);
 });
 ```
 
@@ -232,15 +222,15 @@ neo4j.call('GetAllUsers', null, function(error, data){
  * Server only
  * @description Current GraphDatabase connection object, basically created from 'new Neo4j()''
  */
-N4JDB;
+Meteor.N4JDB;
 
 
 /* You may run queries with no returns on server with it: */
-N4JDB.query('CREATE (a:User {_id: ”123”})');
+Meteor.N4JDB.query('CREATE (a:User {_id: ”123”})');
 
 
 /* To set listener: */
-N4JDB.listen(function(query, opts){
+Meteor.N4JDB.listen(function(query, opts){
   console.log('Incoming query: ' + query, opts);
 });
 ```
