@@ -4,16 +4,25 @@
 /*global Neo4jCacheCollection:false */
 /*global Tracker:false */
 
+/*
+ *
+ * @object
+ * @name neo4j
+ * @description Create application wide object `neo4j`
+ *
+ */
 if (!this.neo4j) {
-  this.neo4j = {};
+  Meteor.neo4j = {};
 }
 
-if (!this.neo4j.uids) {
+this.neo4j = Meteor.neo4j;
+
+if (!Meteor.neo4j.uids) {
   if(Meteor.isClient){
     Session.setDefault('neo4juids', [null]);
   }
 
-  this.neo4j.uids = (Meteor.isServer) ? [] : Session.get('neo4juids');
+  Meteor.neo4j.uids = (Meteor.isServer) ? [] : Session.get('neo4juids');
 }
 
 this.Neo4jCacheCollection = new Meteor.Collection('Neo4jCache');
