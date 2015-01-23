@@ -6,9 +6,6 @@
 /*global Session:false */
 /*global Package:false */
 /*global Neo4jCacheCollection:false */
-/*global ReactiveVar:false */
-/*global Tracker:false */
-/*global Neo4j:false */
 
 /*
  *
@@ -18,8 +15,10 @@
  *
  */
 if (!this.neo4j) {
-  this.neo4j = {};
+  Meteor.neo4j = {};
 }
+
+this.neo4j = Meteor.neo4j;
 
 /*
  *
@@ -49,7 +48,28 @@ if (!neo4j.allowClientQuery){
  *
  */
 if (!neo4j.connectionURL){
-  neo4j.connectionURL = null;
+
+  var connectionURL = null;
+
+  Object.defineProperty(neo4j, 'connectionURL',{
+
+    get: function () {
+      return connectionURL;
+    },
+
+    set: function (val) {
+      if(val !== connectionURL){
+        connectionURL = val;
+
+        if(Meteor.isServer){
+          neo4j.init();
+        }
+      }
+    },
+
+    configurable: false,
+    enumerable: false
+  });
 }
 
 /*
@@ -213,12 +233,11 @@ neo4j.mapParameters = function(query, opts){
  *                              So to get data for query like:
  *                              'MATCH (a:User) RETURN a', you will need to: 
  *                              data.a
- * @param settings {object}   - {returnCursor: boolean} if set to true, returns Mongo.cursor 
  * @description Isomorphic Cypher query call
  * @returns Mongo.cursor [REACTIVE DATA SOURCE]
  *
  */
-neo4j.query = function(query, opts, callback, settings) {
+neo4j.query = function(query, opts, callback) {
   if(opts){
     query = this.mapParameters(query, opts);
     opts = null;
@@ -246,12 +265,12 @@ neo4j.query = function(query, opts, callback, settings) {
 
   if(neo4j.allowClientQuery === true && Meteor.isClient){
     if(callback){
-      callback(null, neo4j.cache.get(uid, settings));
+      callback(null, neo4j.cache.get(uid));
     }else{
-      return neo4j.cache.get(uid, settings);
+      return neo4j.cache.get(uid);
     }
   }else{
-    return neo4j.cache.get(uid, settings);
+    return neo4j.cache.get(uid);
   }
 };
 
@@ -286,51 +305,35 @@ neo4j.isRead = function(query){
   return !neo4j.search(_n, query);
 };
 
+/*
+ *
+ * @function
+ * @namespace neo4j.cache
+ * @name get
+ * @param uid {string}      - Unique hashed ID of the query
+ * @description Get cached response by UID
+ * @returns object
+ *
+ */
+neo4j.cache.get = function(uid) {
+  var cache = Neo4jCacheCollection.find({uid: uid});
 
-
-if(Meteor.isClient){
-
-  /*
-   *
-   * @function
-   * @namespace neo4j.cache
-   * @name get
-   * @param uid {string}      - Unique hashed ID of the query
-   * @param settings {object} - {returnCursor: boolean} if set to true, returns Mongo.cursor 
-   * @description Get cached response by UID
-   * @returns ReactiveVar
-   *
-   */
-  neo4j.cache.get = function(uid, settings) {
-    if(!settings){
-      settings = {
-        returnCursor: false
-      };
-    }
-
-    var cached = new ReactiveVar();
-    
-    Tracker.autorun(function(){
-
-      if(settings.returnCursor === true){
-        cached.set(Neo4jCacheCollection.find({uid: uid}));
-      }else{
-        var cache = Neo4jCacheCollection.find({uid: uid});
-
-        if(cache.fetch()){
-          var c = cache.fetch();
-          if(c[0] && c[0].data){
-            cached.set(c[0].data);
-          }else{
-            cached.set(null);
-          }
+  return {
+    cursor: cache,
+    get: function(){
+      if(cache.fetch()){
+        var c = cache.fetch();
+        if(c[0] && c[0].data){
+          return c[0].data;
+        }else{
+          return null;
         }
       }
-    });
-
-    return cached;
+    }
   };
+};
 
+if(Meteor.isClient){
 
   /*
    *
@@ -344,23 +347,22 @@ if(Meteor.isClient){
    *                                So to get data for query like:
    *                                'MATCH (a:User) RETURN a', you will need to: 
    *                                data.a
-   * @param settings {object}     - {returnCursor: boolean} if set to true, returns Mongo.cursor 
    *                                
    * @description Call for server method registered via neo4j.methods() method, 
    *              returns error, data via callback.
    * @returns ReactiveVar
    *
    */
-  neo4j.call = function(methodName, opts, callback, settings){
+  neo4j.call = function(methodName, opts, callback){
     Meteor.call(methodName, opts, function(error, uid){
       if(error){
         throw new Meteor.Error('500', '[neo4j.call] Method: ["' + methodName + '"] returns error!', error);
       }else{
         Session.set('neo4juids', _.union(Session.get('neo4juids'), [uid]));
         if(callback){
-          callback(error, neo4j.cache.get(uid, settings));
+          callback(error, neo4j.cache.get(uid));
         }
-        return neo4j.cache.get(uid, settings);
+        return neo4j.cache.get(uid);
       }
     });
   };
@@ -369,39 +371,49 @@ if(Meteor.isClient){
 if (Meteor.isServer) {
 
   var Fiber = Meteor.npmRequire('fibers');
-  /*
-   * @description Connect to neo4j database, returns GraphDatabase object
-   */
-  this.N4JDB = new Neo4j(neo4j.connectionURL);
+  this.N4JDB = {};
 
-  /*
-   *
-   * @callback
-   * @description Listen for all requests to neo4j
-   * if request is writing/changing/removing data
-   * we will find all sensitive data and update 
-   * all subscribed records at Neo4jCacheCollection
-   *
-   */
-  N4JDB.listen(function(query, opts){
-    if(neo4j.isWrite(query)){
-      var sensitivities = neo4j.parseSensitivities(query, opts);
-      if(sensitivities){
-        var affectedRecords = Neo4jCacheCollection.find({
-          sensitivities:{
-            '$in':sensitivities
-          }, 
-          type: 'READ'
-        });
+  neo4j.init = function(url){
 
-        Fiber(function() {
-          affectedRecords.forEach(function(value){
-            neo4j.run(value.uid, value.query, value.opts, value.created);
-          });
-        }).run();
-      }
+    if(url && neo4j.connectionURL == null){
+      neo4j.connectionURL = url;
     }
-  });
+
+    /*
+     * @description Connect to neo4j database, returns GraphDatabase object
+     */
+    N4JDB = new Meteor.Neo4j(neo4j.connectionURL);
+    Meteor.N4JDB = N4JDB;
+
+    /*
+     *
+     * @callback
+     * @description Listen for all requests to neo4j
+     * if request is writing/changing/removing data
+     * we will find all sensitive data and update 
+     * all subscribed records at Neo4jCacheCollection
+     *
+     */
+    N4JDB.listen(function(query, opts){
+      if(neo4j.isWrite(query)){
+        var sensitivities = neo4j.parseSensitivities(query, opts);
+        if(sensitivities){
+          var affectedRecords = Neo4jCacheCollection.find({
+            sensitivities:{
+              '$in':sensitivities
+            }, 
+            type: 'READ'
+          });
+
+          Fiber(function() {
+            affectedRecords.forEach(function(value){
+              neo4j.run(value.uid, value.query, value.opts, value.created);
+            });
+          }).run();
+        }
+      }
+    });
+  };
 
   /*
    *
@@ -428,40 +440,6 @@ if (Meteor.isServer) {
         }
       }).run();
     });
-  };
-
-  /*
-   *
-   * @function
-   * @namespace neo4j.cache
-   * @name get
-   * @param uid {string}      - Unique hashed ID of the query
-   * @param settings {object} - {returnCursor: boolean} if set to true, returns Mongo.cursor 
-   * @description Get cached response by UID
-   * @returns Mongo\Cursor or fetched data (string|array)
-   *
-   */
-  neo4j.cache.get = function(uid, settings) {
-    if(!settings){
-      settings = {
-        returnCursor: false
-      };
-    }
-
-    if(settings.returnCursor === true){
-      return Neo4jCacheCollection.find({uid: uid});
-    }else{
-      var cache = Neo4jCacheCollection.find({uid: uid});
-
-      if(cache.fetch()){
-        var c = cache.fetch();
-        if(c[0] && c[0].data){
-          return c[0].data;
-        }else{
-          return null;
-        }
-      }
-    }
   };
 
   /*
@@ -629,4 +607,6 @@ if (Meteor.isServer) {
     });
     Meteor.methods(_methods);
   };
+
+  neo4j.init();
 }
