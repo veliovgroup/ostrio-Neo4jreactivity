@@ -1,402 +1,423 @@
 /*jshint strict:false */
-/*global neo4j:false */
-/*global N4JDB:false */
 /*global Meteor:false */
 /*global _:false */
 /*global Session:false */
+/*global Tracker:false */
 /*global Package:false */
+/*global ReactiveVar:false */
 /*global Neo4jCacheCollection:false */
 
+if (Meteor.isServer) {
+
+  var Fiber = Meteor.npmRequire('fibers');
+  Meteor.N4JDB = {};
+  this.N4JDB = Meteor.N4JDB;
+}
+
 /*
  *
  * @object
+ * @namespace Meteor
  * @name neo4j
- * @description Create application wide object `neo4j`
+ * @description Create `neo4j` object
  *
  */
-if (!this.neo4j) {
-  Meteor.neo4j = {};
-}
+Meteor.neo4j = {
 
-this.neo4j = Meteor.neo4j;
-
-/*
- *
- * @object
- * @namespace neo4j.cache
- *
- */
-if (!neo4j.cache) {
-  neo4j.cache = {};
-}
-
-/*
- *
- * @property allowClientQuery {boolean}
- * @description Set to true to allow run queries from client
- *              Please, do not forget about security and at least run neo4j,set.deny(neo4j.rules.write)
- *
- */
-if (!neo4j.allowClientQuery){
-  neo4j.allowClientQuery = false;
-}
-
-/*
- *
- * @property connectionURL {string} - url to Neo4j database
- * @description Set connection URL to Neo4j Database
- *
- */
-if (!neo4j.connectionURL){
-
-  var connectionURL = null;
-
-  Object.defineProperty(neo4j, 'connectionURL',{
-
-    get: function () {
-      return connectionURL;
-    },
-
-    set: function (val) {
-      if(val !== connectionURL){
-        connectionURL = val;
-
-        if(Meteor.isServer){
-          neo4j.init();
-        }
-      }
-    },
-
-    configurable: false,
-    enumerable: false
-  });
-}
-
-/*
- *
- * @description Create neo4juids Session
- *
- */
-if(Meteor.isClient){
-  Session.setDefault('neo4juids', []);
-}
-
-/*
- *
- * @function
- * @namespace neo4j
- * @name search
- * @param regexp {RegExp}     - Regular Expression
- * @param string {string}     - Haystack
- * @param callback {function} - (OPTIONAL) Callback function(error, data) 
- * @description do search by RegExp in string
- * @returns {boolean}
- *
- */
-neo4j.search = function(regexp, string, callback){
-  if (string && string.search(regexp) !== -1) {
-    return (callback) ? callback(true) : true;
-  }else{
-    return (callback) ? callback(false) : false;
-  }
-};
-
-/*
- *
- * @function
- * @namespace neo4j
- * @name check
- * @param query {string} - Cypher query
- * @description Check query for forbidden operators
- * @returns {undefined} or {throw new Meteor.Error(...)}
- *
- */
-neo4j.check = function(query) {
-  var _n;
-  _.forEach(this.rules.deny, function(value) {
-    _n = new RegExp(value + ' ', 'i');
-    neo4j.search(_n, query, function(isFound){
-      if (isFound) throw new Meteor.Error('401', '[neo4j.check] "' + value + '" is not allowed!', query);
-    });
-  });
-};
-
-/*
- *
- * @object
- * @namespace neo4j
- * @name rules
- * @property allow {array}  - Array of allowed Cypher operators
- * @property deny {array}   - Array of forbidden Cypher operators
- * @property write {array}  - Array of write Cypher operators
- * @description Bunch of Cypher operators
- *
- */
-neo4j.rules = {
-  allow: ['RETURN', 'MATCH', 'SKIP', 'LIMIT', 'OPTIONAL', 'ORDER BY', 'WITH', 'AS', 'WHERE', 'CONSTRAINT', 'UNWIND', 'DISTINCT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'CREATE', 'UNIQUE', 'MERGE', 'SET', 'DELETE', 'REMOVE', 'FOREACH', 'ON', 'INDEX', 'USING', 'DROP'],
-  deny: [],
-  write: ['CREATE', 'SET', 'DELETE', 'REMOVE', 'INDEX', 'DROP', 'MERGE']
-};
-
-/*
- *
- * @object
- * @namespace neo4j
- * @name set
- * @description Methods to set allow/deny operators
- *
- */
-neo4j.set = {
-  /*
-   *
-   * @function
-   * @namespace neo4j.set
-   * @name allow
-   * @param rules {array} - Array of Cypher operators to be allowed in app
-   *
-   */
-  allow: function(rules) {
-    if(rules === '*'){
-      neo4j.rules.allow = _.union(neo4j.rules.allow, neo4j.rules.deny);
-      neo4j.rules.deny = [];
-    }else{
-      rules = this.apply(rules);
-      neo4j.rules.allow = _.union(neo4j.rules.allow, rules);
-      neo4j.rules.deny = _.difference(neo4j.rules.deny, rules);
-    }
-  },
+  resultsCache: {},
 
   /*
    *
-   * @function
-   * @namespace neo4j.set
-   * @name deny
-   * @param rules {array} - Array of Cypher operators to be forbidden in app
+   * @property allowClientQuery {boolean}
+   * @description Set to true to allow run queries from client
+   *              Please, do not forget about security and 
+   *              at least run Meteor.neo4j.set.deny(Meteor.neo4j.rules.write)
    *
    */
-  deny: function(rules) {
-    if(rules === '*'){
-      neo4j.rules.deny = _.union(neo4j.rules.allow, neo4j.rules.deny);
-      neo4j.rules.allow = [];
-    }else{
-      rules = this.apply(rules);
-      neo4j.rules.deny = _.union(neo4j.rules.deny, rules);
-      neo4j.rules.allow = _.difference(neo4j.rules.allow, rules);
-    }
-  },
-
-  /*
-   *
-   * @function
-   * @namespace neo4j.set
-   * @name apply
-   * @param rules {array} - fix lowercased operators
-   *
-   */
-  apply: function(rules) {
-    var key;
-    for (key in rules) {
-      rules[key] = rules[key].toUpperCase();
-    }
-    return rules;
-  }
-};
-
-/*
- *
- * @function
- * @namespace neo4j
- * @name mapParameters
- * @param query {string}      - Cypher query
- * @param opts {object}       - A map of parameters for the Cypher query
- * 
- * @description Isomorphic mapParameters for neo4j query
- * @returns {string} - query with replaced map of parameters
- *
- */
-neo4j.mapParameters = function(query, opts){
-  _.forEach(opts, function(value, key){
-    value = (!isNaN(value)) ? value : '"' + value + '"';
-    query = query.replace('{' + key + '}', value).replace('{ ' + key + ' }', value);
-  });
-  return query;
-};
-
-/*
- *
- * @function
- * @namespace neo4j
- * @name query
- * @param query {string}      - Cypher query
- * @param opts {object}       - A map of parameters for the Cypher query
- * @param callback {function} - Callback function(error, data){...}. Where is data is [REACTIVE DATA SOURCE]
- *                              So to get data for query like:
- *                              'MATCH (a:User) RETURN a', you will need to: 
- *                              data.a
- * @description Isomorphic Cypher query call
- * @returns Mongo.cursor [REACTIVE DATA SOURCE]
- *
- */
-neo4j.query = function(query, opts, callback) {
-  if(opts){
-    query = this.mapParameters(query, opts);
-    opts = null;
-  }
-
-  this.check(query);
-  var uid = Package.sha.SHA256(query);
-  
-  var cached = Neo4jCacheCollection.find({
-    uid: uid
-  });
-
-  if(cached.fetch().length === 0 || this.isWrite(query)){
-    if(Meteor.isServer){
-      this.run(uid, query, opts, new Date());
-    }else if(neo4j.allowClientQuery === true && Meteor.isClient){
-      Meteor.call('Neo4jRun', uid, query, opts, new Date(), function(error) {
-        if (error) {
-          throw new Meteor.Error('500', 'Calling method [Neo4jRun]', [error, query, opts].toString());
-        }
-      });
-      Session.set('neo4juids', _.union(Session.get('neo4juids'), [uid]));
-    }
-  }
-
-  if(neo4j.allowClientQuery === true && Meteor.isClient){
-    if(callback){
-      callback(null, neo4j.cache.get(uid));
-    }else{
-      return neo4j.cache.get(uid);
-    }
-  }else{
-    return neo4j.cache.get(uid);
-  }
-};
-
-
-/*
- *
- * @function
- * @namespace neo4j
- * @name isWrite
- * @param query {string} - Cypher query
- * @description Returns true if `query` writing/changing/removing data
- * @returns {boolean}
- *
- */
-neo4j.isWrite = function(query){
-  var _n = new RegExp('(' + neo4j.rules.write.join('|') + '*)', 'gi');
-  return neo4j.search(_n, query);
-};
-
-/*
- *
- * @function
- * @namespace neo4j
- * @name isRead
- * @param query {string} - Cypher query
- * @description Returns true if `query` only reading
- * @returns {boolean}
- *
- */
-neo4j.isRead = function(query){
-  var _n = new RegExp('(' + neo4j.rules.write.join('|') + '*)', 'gi');
-  return !neo4j.search(_n, query);
-};
-
-/*
- *
- * @function
- * @namespace neo4j.cache
- * @name get
- * @param uid {string}      - Unique hashed ID of the query
- * @description Get cached response by UID
- * @returns object
- *
- */
-neo4j.cache.get = function(uid) {
-  var cache = Neo4jCacheCollection.find({uid: uid});
-
-  return {
-    cursor: cache,
-    get: function(){
-      if(cache.fetch()){
-        var c = cache.fetch();
-        if(c[0] && c[0].data){
-          return c[0].data;
-        }else{
-          return null;
-        }
-      }
-    }
-  };
-};
-
-if(Meteor.isClient){
+  allowClientQuery: false,
 
   /*
    *
    * @function
    * @namespace neo4j
-   * @name call
-   * @param methodName {string}   - method name registered via neo4j.methods() method
-   * @param opts {object|null}    - [NOT REQUIRED] A map of parameters for the Cypher query. 
-   *                                Like: {userName: 'Joe'}, for query like: MATCH (a:User {name: {userName}}) RETURN a
-   * @param callback {function}   - Callback function(error, data){...}. Where is data is [REACTIVE DATA SOURCE]
-   *                                So to get data for query like:
-   *                                'MATCH (a:User) RETURN a', you will need to: 
-   *                                data.a
-   *                                
-   * @description Call for server method registered via neo4j.methods() method, 
-   *              returns error, data via callback.
-   * @returns ReactiveVar
+   * @name search
+   * @param regexp {RegExp}     - Regular Expression
+   * @param string {string}     - Haystack
+   * @param callback {function} - (OPTIONAL) Callback function(error, data) 
+   * @description do search by RegExp in string
+   * @returns {boolean}
    *
    */
-  neo4j.call = function(methodName, opts, callback){
-    Meteor.call(methodName, opts, function(error, uid){
-      if(error){
-        throw new Meteor.Error('500', '[neo4j.call] Method: ["' + methodName + '"] returns error!', error);
+  search: function(regexp, string, callback){
+    if (string && string.search(regexp) !== -1) {
+      return (callback) ? callback(true) : true;
+    }else{
+      return (callback) ? callback(false) : false;
+    }
+  },
+
+  /*
+   *
+   * @function
+   * @namespace neo4j
+   * @name check
+   * @param query {string} - Cypher query
+   * @description Check query for forbidden operators
+   * @returns {undefined} or {throw new Meteor.Error(...)}
+   *
+   */
+  check: function(query) {
+    if(Meteor.isClient){
+      var _n;
+      _.forEach(this.rules.deny, function(value) {
+        _n = new RegExp(value + ' ', 'i');
+        Meteor.neo4j.search(_n, query, function(isFound){
+          if (isFound) throw new Meteor.Error('401', '[Meteor.neo4j.check] "' + value + '" is not allowed!', query);
+        });
+      });
+    }
+  },
+
+  /*
+   *
+   * @object
+   * @namespace neo4j
+   * @name rules
+   * @property allow {array}  - Array of allowed Cypher operators
+   * @property deny {array}   - Array of forbidden Cypher operators
+   * @property write {array}  - Array of write Cypher operators
+   * @description Bunch of Cypher operators
+   *
+   */
+  rules: {
+    allow: ['RETURN', 'MATCH', 'SKIP', 'LIMIT', 'OPTIONAL', 'ORDER BY', 'WITH', 'AS', 'WHERE', 'CONSTRAINT', 'UNWIND', 'DISTINCT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'CREATE', 'UNIQUE', 'MERGE', 'SET', 'DELETE', 'REMOVE', 'FOREACH', 'ON', 'INDEX', 'USING', 'DROP'],
+    deny: [],
+    write: ['CREATE', 'SET', 'DELETE', 'REMOVE', 'INDEX', 'DROP', 'MERGE']
+  },
+
+  /*
+   *
+   * @object
+   * @namespace neo4j
+   * @name set
+   * @description Methods to set allow/deny operators
+   *
+   */
+  set: {
+    /*
+     *
+     * @function
+     * @namespace neo4j.set
+     * @name allow
+     * @param rules {array} - Array of Cypher operators to be allowed in app
+     *
+     */
+    allow: function(rules) {
+      if(rules === '*'){
+        Meteor.neo4j.rules.allow = _.union(Meteor.neo4j.rules.allow, Meteor.neo4j.rules.deny);
+        Meteor.neo4j.rules.deny = [];
       }else{
-        Session.set('neo4juids', _.union(Session.get('neo4juids'), [uid]));
-        if(callback){
-          callback(error, neo4j.cache.get(uid));
-        }
-        return neo4j.cache.get(uid);
+        rules = this.apply(rules);
+        Meteor.neo4j.rules.allow = _.union(Meteor.neo4j.rules.allow, rules);
+        Meteor.neo4j.rules.deny = _.difference(Meteor.neo4j.rules.deny, rules);
       }
+    },
+
+    /*
+     *
+     * @function
+     * @namespace neo4j.set
+     * @name deny
+     * @param rules {array} - Array of Cypher operators to be forbidden in app
+     *
+     */
+    deny: function(rules) {
+      if(rules === '*'){
+        Meteor.neo4j.rules.deny = _.union(Meteor.neo4j.rules.allow, Meteor.neo4j.rules.deny);
+        Meteor.neo4j.rules.allow = [];
+      }else{
+        rules = this.apply(rules);
+        Meteor.neo4j.rules.deny = _.union(Meteor.neo4j.rules.deny, rules);
+        Meteor.neo4j.rules.allow = _.difference(Meteor.neo4j.rules.allow, rules);
+      }
+    },
+
+    /*
+     *
+     * @function
+     * @namespace neo4j.set
+     * @name apply
+     * @param rules {array} - fix lowercased operators
+     *
+     */
+    apply: function(rules) {
+      var key;
+      for (key in rules) {
+        rules[key] = rules[key].toUpperCase();
+      }
+      return rules;
+    }
+  },
+
+  /*
+   *
+   * @function
+   * @namespace neo4j
+   * @name mapParameters
+   * @param query {string}      - Cypher query
+   * @param opts {object}       - A map of parameters for the Cypher query
+   * 
+   * @description Isomorphic mapParameters for Neo4j query
+   * @returns {string} - query with replaced map of parameters
+   *
+   */
+  mapParameters: function(query, opts){
+    _.forEach(opts, function(value, key){
+      value = (!isNaN(value)) ? value : '"' + value + '"';
+      query = query.replace('{' + key + '}', value).replace('{ ' + key + ' }', value);
     });
-  };
-}
+    return query;
+  },
 
-if (Meteor.isServer) {
+  /*
+   *
+   * @function
+   * @namespace neo4j
+   * @name query
+   * @param query {string}      - Cypher query
+   * @param opts {object}       - A map of parameters for the Cypher query
+   * @param callback {function} - Callback function(error, data){...}
+   * @description Isomorphic Cypher query call
+   * @returns {object} | With get() method [REACTIVE DATA SOURCE]
+   *
+   */
+  query: function(query, opts, callback) {
+    if(opts){
+      query = this.mapParameters(query, opts);
+      opts = null;
+    }
 
-  var Fiber = Meteor.npmRequire('fibers');
-  this.N4JDB = {};
+    this.check(query);
+    var uid = Package.sha.SHA256(query);
+    
+    var cached = Neo4jCacheCollection.find({
+      uid: uid
+    });
 
-  neo4j.init = function(url){
+    if(cached.fetch().length === 0 || this.isWrite(query)){
+      if(Meteor.isServer){
+        this.run(uid, query, opts, new Date());
+      }else if(this.allowClientQuery === true && Meteor.isClient){
+        Meteor.call('Neo4jRun', uid, query, opts, new Date(), function(error) {
+          if (error) {
+            throw new Meteor.Error('500', 'Calling method [Neo4jRun]', [error, query, opts].toString());
+          }
+        });
+        Session.set('neo4juids', _.union(Session.get('neo4juids'), [uid]));
+      }
+    }
 
-    if(url && neo4j.connectionURL == null){
-      neo4j.connectionURL = url;
+    return this.cache.get(uid, callback);
+  },
+
+
+  /*
+   *
+   * @function
+   * @namespace neo4j
+   * @name isWrite
+   * @param query {string} - Cypher query
+   * @description Returns true if `query` writing/changing/removing data
+   * @returns {boolean}
+   *
+   */
+  isWrite: function(query){
+    var _n = new RegExp('(' + this.rules.write.join('|') + '*)', 'gi');
+    return this.search(_n, query);
+  },
+
+  /*
+   *
+   * @function
+   * @namespace neo4j
+   * @name isRead
+   * @param query {string} - Cypher query
+   * @description Returns true if `query` only reading
+   * @returns {boolean}
+   *
+   */
+  isRead: function(query){
+    var _n = new RegExp('(' + this.rules.write.join('|') + '*)', 'gi');
+    return !this.search(_n, query);
+  },
+
+  cache: {
+    /*
+     *
+     * @function
+     * @namespace neo4j.cache
+     * @name getObject
+     * @param uid {string}      - Unique hashed ID of the query
+     * @description Get cached response by UID
+     * @returns object
+     *
+     */
+    getObject: function(uid) {
+      if(Meteor.neo4j.allowClientQuery === true && Meteor.isClient || Meteor.isServer){
+        var cache = Neo4jCacheCollection.find({uid: uid});
+
+        if(Meteor.isServer){
+          if(Neo4jCacheCollection.findOne({uid: uid})){
+            Meteor.neo4j.resultsCache['NEO4JRES_' + uid] = Neo4jCacheCollection.findOne({uid: uid}).data;
+          }
+
+
+          cache.observe({
+            added: function(doc){
+              Meteor.neo4j.resultsCache['NEO4JRES_' + uid] = doc.data;
+            },
+            changed: function(doc){
+              Meteor.neo4j.resultsCache['NEO4JRES_' + uid] = doc.data;
+            },
+            removed: function(){
+              Meteor.neo4j.resultsCache['NEO4JRES_' + uid] = null;
+            }
+          });
+
+          return {
+            cursor: cache,
+            get: function(){
+              return Meteor.neo4j.resultsCache['NEO4JRES_' + uid];
+            }
+          };
+
+        }else{
+
+          var result = new ReactiveVar(null);
+
+          if(Neo4jCacheCollection.findOne({uid: uid})){
+            result.set(Neo4jCacheCollection.findOne({uid: uid}).data);
+          }
+
+          cache.observe({
+            added: function(doc){
+              result.set(doc.data);
+            },
+            changed: function(doc){
+              result.set(doc.data);
+            },
+            removed: function(){
+              result.set(null);
+            }
+          });
+
+          return {
+            cursor: cache,
+            get: function(){
+              return result.get();
+            }
+          };
+        }
+      }
+    },
+
+    /*
+     *
+     * @function
+     * @namespace neo4j.cache
+     * @name get
+     * @param uid {string}      - Unique hashed ID of the query
+     * @param callback {function}   - Callback function(error, data){...}.
+     * @description Get cached response by UID
+     * @returns object
+     *
+     */
+    get: function(uid, callback) {
+
+      if(Meteor.neo4j.allowClientQuery === true && Meteor.isClient){
+        
+        if(callback){
+          Tracker.autorun(function(){
+            var result = Neo4jCacheCollection.findOne({uid: uid});
+            if(result && result.data){
+              callback(null, result.data);
+            }
+          });
+        }
+
+      }else{
+
+        if(callback){
+          if(!Neo4jCacheCollection.findOne({uid: uid})){
+            Neo4jCacheCollection.find({uid: uid}).observe({
+              added: function(){
+                callback(null, Neo4jCacheCollection.findOne({uid: uid}).data);
+              }
+            });
+          }else{
+            callback(null, Neo4jCacheCollection.findOne({uid: uid}).data);
+          }
+        }
+      }
+
+      return Meteor.neo4j.cache.getObject(uid);
+    },
+
+
+    /*
+     *
+     * @function
+     * @namespace neo4j.cache
+     * @name put
+     * @param uid {string}          - Unique hashed ID of the query
+     * @param data {object}         - Data returned from neo4j (Cypher query response)
+     * @param queryString {string}  - Cypher query
+     * @param opts {object}         - A map of parameters for the Cypher query
+     * @param date {Date}           - Creation date
+     * @description Upsert reactive mongo cache collection
+     *
+     */
+    put: (Meteor.isServer) ? function(uid, data, queryString, opts, date) {
+      return Neo4jCacheCollection.upsert({
+        uid: uid
+      }, {
+        uid: uid,
+        data: Meteor.neo4j.parseReturn(data, queryString),
+        query: queryString,
+        sensitivities: Meteor.neo4j.parseSensitivities(queryString, opts),
+        opts: opts,
+        type: (Meteor.neo4j.isWrite(queryString)) ? 'WRITE' : 'READ',
+        created: date
+      }, function(error) {
+        if (error) {
+          throw new Meteor.Error('500', 'Neo4jCacheCollection.upsert: [Meteor.neo4j.cache.put]', [uid, data, queryString, opts, date].toString());
+        }
+      });
+    } : undefined
+  },
+
+  init: (Meteor.isServer) ? function(url){
+    if(url && this.connectionURL == null){
+      this.connectionURL = url;
     }
 
     /*
-     * @description Connect to neo4j database, returns GraphDatabase object
+     * @description Connect to Neo4j database, returns GraphDatabase object
      */
-    N4JDB = new Meteor.Neo4j(neo4j.connectionURL);
-    Meteor.N4JDB = N4JDB;
+    Meteor.N4JDB = new Meteor.Neo4j(Meteor.neo4j.connectionURL);
 
     /*
      *
      * @callback
-     * @description Listen for all requests to neo4j
+     * @description Listen for all requests to Neo4j
      * if request is writing/changing/removing data
      * we will find all sensitive data and update 
      * all subscribed records at Neo4jCacheCollection
      *
      */
-    N4JDB.listen(function(query, opts){
-      if(neo4j.isWrite(query)){
-        var sensitivities = neo4j.parseSensitivities(query, opts);
+    Meteor.N4JDB.listen(function(query, opts){
+      if(Meteor.neo4j.isWrite(query)){
+        var sensitivities = Meteor.neo4j.parseSensitivities(query, opts);
         if(sensitivities){
           var affectedRecords = Neo4jCacheCollection.find({
             sensitivities:{
@@ -407,13 +428,13 @@ if (Meteor.isServer) {
 
           Fiber(function() {
             affectedRecords.forEach(function(value){
-              neo4j.run(value.uid, value.query, value.opts, value.created);
+              Meteor.neo4j.run(value.uid, value.query, value.opts, value.created);
             });
           }).run();
         }
       }
     });
-  };
+  } : undefined,
 
   /*
    *
@@ -424,54 +445,23 @@ if (Meteor.isServer) {
    * @param query {string}      - Cypher query
    * @param opts {object}       - A map of parameters for the Cypher query
    * @param date {Date}         - Creation date
-   * @param callback {function} - Callback function(error, data) 
    * @description Run Cypher query, handle response with Fibers
    *
    */
-  neo4j.run = function(uid, query, opts, date) {
+  run: (Meteor.isServer) ? function(uid, query, opts, date) {
     this.check(query);
 
-    N4JDB.query(query, opts, function(error, data) {
+    Meteor.N4JDB.query(query, opts, function(error, data) {
       Fiber(function() {
         if (error) {
-          throw new Meteor.Error('500', 'N4JDB.query: [neo4j.run]: ' + [error, uid, query, opts, date].toString());
+          throw new Meteor.Error('500', 'Meteor.N4JDB.query: [Meteor.neo4j.run]: ' + [error, uid, query, opts, date].toString());
         } else {
-          return neo4j.cache.put(uid, data || null, query, opts, date);
+          return Meteor.neo4j.cache.put(uid, data || null, query, opts, date);
         }
       }).run();
     });
-  };
+  } : undefined,
 
-  /*
-   *
-   * @function
-   * @namespace neo4j.cache
-   * @name put
-   * @param uid {string}          - Unique hashed ID of the query
-   * @param data {object}         - Data returned from neo4j (Cypher query response)
-   * @param queryString {string}  - Cypher query
-   * @param opts {object}         - A map of parameters for the Cypher query
-   * @param date {Date}           - Creation date
-   * @description Upsert reactive mongo cache collection
-   *
-   */
-  neo4j.cache.put = function(uid, data, queryString, opts, date) {
-    return Neo4jCacheCollection.upsert({
-      uid: uid
-    }, {
-      uid: uid,
-      data: neo4j.parseReturn(data, queryString),
-      query: queryString,
-      sensitivities: neo4j.parseSensitivities(queryString, opts),
-      opts: opts,
-      type: (neo4j.isWrite(queryString)) ? 'WRITE' : 'READ',
-      created: date
-    }, function(error) {
-      if (error) {
-        throw new Meteor.Error('500', 'Neo4jCacheCollection.upsert: [neo4j.cache.put]', [uid, data, queryString, opts, date].toString());
-      }
-    });
-  };
 
   /*
    *
@@ -483,7 +473,7 @@ if (Meteor.isServer) {
    * @returns {object}
    *
    */
-  neo4j.parseReturn = function(data, queryString){
+  parseReturn: (Meteor.isServer) ? function(data, queryString){
     var i,
         _res,
         _data = data,
@@ -498,6 +488,14 @@ if (Meteor.isServer) {
         _res = queryString.replace(/.*return /i,'').trim();
         _res = _res.split(',');
 
+        _res = _res.map(function(str){ 
+          str = str.trim(); 
+          if(str.indexOf(' AS ') !== -1){
+            str = _.last(str.split(' '));
+          }
+          return str;
+        });
+
         _clauses = _.last(_res);
         if(_clauses.indexOf(' ') !== -1){
           var _clause = _.first(_clauses.split(' '));
@@ -507,7 +505,6 @@ if (Meteor.isServer) {
         for (i in _res){
           _res[i] = _res[i].trim();
           _originals[i] = _res[i];
-
 
           if(_res[i].indexOf(' ') !== -1){
             _res[i] = _.last(_res[i].split(' '));
@@ -520,7 +517,9 @@ if (Meteor.isServer) {
         data.map(function (result) {
           for (i in _res){
             if(!!result[_res[i]]){
-              if (_originals[i].indexOf('.') !== -1) {
+              if(_res[i].indexOf('(') !== -1 && _res[i].indexOf(')') !== -1){
+                _data[_res[i]] = result[_res[i]];
+              }else if (_originals[i].indexOf('.') !== -1 || _.isString(result[_res[i]]) || _.isNumber(result[_res[i]]) || _.isBoolean(result[_res[i]]) || _.isDate(result[_res[i]]) || _.isNaN(result[_res[i]]) || _.isNull(result[_res[i]]) || _.isUndefined(result[_res[i]])) {
                 _data[_res[i]].push(result[_res[i]]);
               }else{
                 if(!!result[_res[i]].data && !!result[_res[i]]._data && !!result[_res[i]]._data.metadata)
@@ -545,9 +544,10 @@ if (Meteor.isServer) {
       }
     });
 
-    neo4j.returns = _res;
+    this.returns = _res;
     return _data;
-  };
+  } : undefined,
+
 
   /*
    *
@@ -560,8 +560,8 @@ if (Meteor.isServer) {
    * @returns {Array}
    *
    */
-  neo4j.parseSensitivities = function(query, opts){
-    var _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'|:(\w*)/gi);
+  parseSensitivities: (Meteor.isServer) ? function(query, opts){
+    var _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'|:[^\'\"](\w*)/gi);
     var matches, result = [];
     while(matches = _n.exec(query)){ 
       if(matches[0]){
@@ -577,36 +577,112 @@ if (Meteor.isServer) {
     }
 
     return result;
-  };
+  } : undefined,
 
   /*
    *
    * @function
    * @namespace neo4j
    * @name methods
-   * @param methods {object} - Object of methods, like: { methodName: function(){ return 'MATCH (a:User {name: {userName}}) RETURN a' } }
+   * @param methods {object} - Object of methods, like: 
+   *                           {
+   *                              methodName: function(){ 
+   *                                return 'MATCH (a:User {name: {userName}}) RETURN a';
+   *                              } 
+   *                           }
    * @description Create server methods to send query to neo4j database
    * @returns {string} record uid
    *
    */
-  neo4j.methods = function(methods){
+  methods: (Meteor.isServer) ?  function(methods){
     var _methods = {};
 
     _.forEach(methods, function(query, methodName){
       _methods[methodName] = function(opts){
         var _query = query();
         if(opts){
-          _query = neo4j.mapParameters(_query, opts);
+          _query = Meteor.neo4j.mapParameters(_query, opts);
           opts = null;
         }
         var uid = Package.sha.SHA256(_query);
-        neo4j.query(_query, opts);
-
+        Meteor.neo4j.query(_query, opts);
         return uid;
       };
     });
     Meteor.methods(_methods);
-  };
+  } : undefined,
 
-  neo4j.init();
+  /*
+   *
+   * @function
+   * @namespace neo4j
+   * @name call
+   * @param methodName {string}   - method name registered via neo4j.methods() method
+   * @param opts {object|null}    - [NOT REQUIRED] A map of parameters for the Cypher query. 
+   *                                Like: {userName: 'Joe'}, for query like: MATCH (a:User {name: {userName}}) RETURN a
+   * @param callback {function}   - Callback function(error, data){...}.
+   * @description Call for server method registered via neo4j.methods() method, 
+   *              returns error, data via callback.
+   * @returns {object} | With get() method [REACTIVE DATA SOURCE]
+   *
+   */
+  call: (Meteor.isClient) ? function(methodName, opts, callback){
+    Meteor.call(methodName, opts, function(error, uid){
+      if(error){
+        throw new Meteor.Error('500', '[Meteor.neo4j.call] Method: ["' + methodName + '"] returns error!', error);
+      }else{
+        Session.set('neo4juids', _.union(Session.get('neo4juids'), [uid]));
+        return Meteor.neo4j.cache.get(uid, callback);
+      }
+    });
+    return undefined;
+  } : undefined
+};
+
+/*
+ *
+ * @description Create neo4juids Session
+ *
+ */
+if(Meteor.isClient){
+  Session.setDefault('neo4juids', []);
+}
+
+/*
+ *
+ * @property connectionURL {string} - url to Neo4j database
+ * @description Set connection URL to Neo4j Database
+ *
+ */
+var connectionURL = null;
+
+Object.defineProperty(Meteor.neo4j, 'connectionURL',{
+  get: function () {
+    return connectionURL;
+  },
+
+  set: function (val) {
+    if(val !== connectionURL){
+      connectionURL = val;
+
+      if(Meteor.isServer){
+        Meteor.neo4j.init();
+      }
+    }
+  },
+
+  configurable: false,
+  enumerable: false
+});
+
+this.neo4j = Meteor.neo4j;
+
+if (Meteor.isServer) {
+
+  /*
+   *
+   * @description Initialize connection to Neo4j
+   *
+   */
+  Meteor.neo4j.init();
 }
