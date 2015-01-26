@@ -9,7 +9,7 @@ Due to security lack we decide separate server side with queries, and client sid
 
 To create method use ```Meteor.neo4j.methods({'object of functions'})``` with functions which returns query string (see example below).
 
-To call and handle database answer use: ```Meteor.neo4j.call('methodName', {'A map of parameters for the Cypher query'}, function(error, data){...})```, to get reactive data call: ```get()``` method on data returned from Neo4j database, like: ```data.get()```
+To call and handle database answer use: ```Meteor.neo4j.call('methodName', {'A map of parameters for the Cypher query'}, function(error, data){...})```
 
 ##### Install the driver
 ```
@@ -38,7 +38,7 @@ Template.friendsNamesList.helpers
                  #handle error here
                  throw new Meteor.error '500', 'Something goes wrong here', error.toString()
             else
-                Session.set 'currenUserFriends', record.get()
+                Session.set 'currenUserFriends', record
 
         return Session.get 'currentUserFriens'
 ```
@@ -191,6 +191,12 @@ Meteor.neo4j.set.deny(rules /* array of strings */);
 allUsers = Meteor.neo4j.query('MATCH (users:User) RETURN users');
 var users = allUsers.get().users;
 
+/* or via callback, on callback there is no need to run `get()` method */
+var users;
+Meteor.neo4j.query('MATCH (users:User) RETURN users', null, function(error, data){
+    users = data.users;
+});
+
 
 /*
  * Server only
@@ -212,7 +218,7 @@ Meteor.neo4j.methods({
  *              returns error, data via callback.
  */
 Meteor.neo4j.call('GetAllUsers', null, function(error, data){
-   Session.set('AllUsers', data);
+   Session.set('AllUsers', data.users);
 });
 ```
 
