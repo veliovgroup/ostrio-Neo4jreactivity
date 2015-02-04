@@ -33,12 +33,12 @@ Meteor.neo4j.methods
 Template.friendsNamesList.helpers
     userFriends: () ->
 
-        Meteor.neo4j.call 'getUsersFriends', {userId: '12345'}, (error, record) ->
+        Meteor.neo4j.call 'getUsersFriends', {userId: '12345'}, (error, data) ->
             if error
                  #handle error here
                  throw new Meteor.error '500', 'Something goes wrong here', error.toString()
             else
-                Session.set 'currenUserFriends', record
+                Session.set 'currenUserFriends', data
 
         return Session.get 'currentUserFriens'
 ```
@@ -134,7 +134,7 @@ var N4JDB = new Neo4j();
 Newly created object has next functions, you will use:
 ```javascript
 /* @name query */
-Meteor.N4JDB.query('MATCH (n:User) RETURN n', opts /* A map of parameters for the Cypher query */, function(err, data){
+Meteor.N4JDB.query('MATCH (n:User) RETURN n', null /* A map of parameters for the Cypher query */, function(err, data){
     Session.set('allUsers', data);
 });
 
