@@ -3,10 +3,8 @@ ejson@1.0.5
 http@1.0.10
 json@1.0.2
 meteor@1.1.4
-meteorhacks:async@1.0.0
-meteorhacks:npm@1.2.2
-ostrio:neo4jdriver@0.2.7
-ostrio:neo4jreactivity@0.5.0
+ostrio:neo4jdriver@0.2.10
+ostrio:neo4jreactivity@0.5.3
 reactive-dict@1.0.5
 reactive-var@1.0.4
 session@1.0.5

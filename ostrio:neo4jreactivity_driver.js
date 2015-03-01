@@ -8,8 +8,9 @@
 /*global Neo4jCacheCollection:false */
 
 if (Meteor.isServer) {
-
-  var Fiber = Meteor.npmRequire('fibers');
+  var bound = Meteor.bindEnvironment(function(callback){
+    callback()
+  });
   Meteor.N4JDB = {};
   this.N4JDB = Meteor.N4JDB;
 }
@@ -426,11 +427,11 @@ Meteor.neo4j = {
             type: 'READ'
           });
 
-          Fiber(function() {
+          bound(function() {
             affectedRecords.forEach(function(value){
               Meteor.neo4j.run(value.uid, value.query, value.opts, value.created);
             });
-          }).run();
+          });
         }
       }
     });
@@ -452,13 +453,13 @@ Meteor.neo4j = {
     this.check(query);
 
     Meteor.N4JDB.query(query, opts, function(error, data) {
-      Fiber(function() {
+      bound(function() {
         if (error) {
           throw new Meteor.Error('500', 'Meteor.N4JDB.query: [Meteor.neo4j.run]: ' + [error, uid, query, opts, date].toString());
         } else {
           return Meteor.neo4j.cache.put(uid, data || null, query, opts, date);
         }
-      }).run();
+      });
     });
   } : undefined,
 
