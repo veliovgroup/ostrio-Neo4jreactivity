@@ -11,10 +11,16 @@ To create method use ```Meteor.neo4j.methods({'object of functions'})``` with fu
 
 To call and handle database answer use: ```Meteor.neo4j.call('methodName', {'A map of parameters for the Cypher query'}, function(error, data){...})```
 
+
 ##### Install the driver
 ```
 meteor add ostrio:neo4jreactivity
 ```
+
+##### Known issues:
+ - __[Error: Neo4jCacheCollection.upsert in v2.2.*](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/issues/22)__: - You need to disable default authentication in Neo4j-2.2.*:
+    * Open file `/Your_Neo4j-2.2.0_install_path/conf/neo4j-server.properties`
+    * Change line: `dbms.security.auth_enabled=true` (to false)
 
 ##### Usage example:
 ###### In Server Methods
