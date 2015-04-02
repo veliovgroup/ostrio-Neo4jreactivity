@@ -577,7 +577,7 @@ Meteor.neo4j = {
    *
    */
   parseSensitivities: (Meteor.isServer) ? function(query, opts){
-    var _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'|:[^\'\"](\w*)/gi);
+    var _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'|:[^\'\"\ ](\w*)/gi);
     var matches, result = [];
     while(matches = _n.exec(query)){ 
       if(matches[0]){
