@@ -1,8 +1,8 @@
 /*jshint strict:false */
 /*global Meteor:false */
-/*global Session:false */
 /*global Neo4jCacheCollection:false */
 /*global Tracker:false */
+/*global ReactiveVar:false */
 
 /*
  *
@@ -19,10 +19,10 @@ this.neo4j = Meteor.neo4j;
 
 if (!Meteor.neo4j.uids) {
   if(Meteor.isClient){
-    Session.setDefault('neo4juids', [null]);
+    Meteor.neo4j.uids = new ReactiveVar([]);
   }
 
-  Meteor.neo4j.uids = (Meteor.isServer) ? [] : Session.get('neo4juids');
+  Meteor.neo4j.uids = (Meteor.isServer) ? [] : Meteor.neo4j.uids.get();
 }
 
 this.Neo4jCacheCollection = new Meteor.Collection('Neo4jCache');
@@ -53,7 +53,7 @@ if (Meteor.isServer) {
 
 if (Meteor.isClient) {
   Tracker.autorun(function(){
-    return Meteor.subscribe('Neo4jCacheCollection', Session.get('neo4juids'));
+    return Meteor.subscribe('Neo4jCacheCollection', Meteor.neo4j.uids.get());
   });
 }
 

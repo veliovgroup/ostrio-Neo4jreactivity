@@ -1,7 +1,6 @@
 /*jshint strict:false */
 /*global Meteor:false */
 /*global _:false */
-/*global Session:false */
 /*global Tracker:false */
 /*global Package:false */
 /*global ReactiveVar:false */
@@ -214,7 +213,7 @@ Meteor.neo4j = {
             throw new Meteor.Error('500', 'Calling method [Neo4jRun]: ' + [error, query, opts].toString());
           }
         });
-        Session.set('neo4juids', _.union(Session.get('neo4juids'), [uid]));
+        Meteor.neo4j.uids.set(_.union(Meteor.neo4j.uids.get(), [uid]));
       }
     }
 
@@ -647,7 +646,7 @@ Meteor.neo4j = {
       if(error){
         throw new Meteor.Error('500', '[Meteor.neo4j.call] Method: ["' + methodName + '"] returns error! | ' + [error].toString());
       }else{
-        Session.set('neo4juids', _.union(Session.get('neo4juids'), [uid]));
+        Meteor.neo4j.uids.set(_.union(Meteor.neo4j.uids.get(), [uid]));
         return Meteor.neo4j.cache.get(uid, callback);
       }
     });
@@ -657,11 +656,11 @@ Meteor.neo4j = {
 
 /*
  *
- * @description Create neo4juids Session
+ * @description Create Meteor.neo4j.uids ReactiveVar
  *
  */
 if(Meteor.isClient){
-  Session.setDefault('neo4juids', []);
+  Meteor.neo4j.uids = new ReactiveVar([]);
 }
 
 /*
