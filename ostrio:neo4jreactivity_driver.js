@@ -1,7 +1,6 @@
 /*jshint strict:false */
 /*global Meteor:false */
 /*global _:false */
-/*global Session:false */
 /*global Tracker:false */
 /*global Package:false */
 /*global ReactiveVar:false */
@@ -9,7 +8,7 @@
 
 if (Meteor.isServer) {
   var bound = Meteor.bindEnvironment(function(callback){
-    callback()
+    callback();
   });
   Meteor.N4JDB = {};
   this.N4JDB = Meteor.N4JDB;
@@ -73,7 +72,7 @@ Meteor.neo4j = {
       _.forEach(this.rules.deny, function(value) {
         _n = new RegExp(value + ' ', 'i');
         Meteor.neo4j.search(_n, query, function(isFound){
-          if (isFound) throw new Meteor.Error('401', '[Meteor.neo4j.check] "' + value + '" is not allowed!', query);
+          if (isFound) throw new Meteor.Error('401', '[Meteor.neo4j.check] "' + value + '" is not allowed! | ' + [query].toString());
         });
       });
     }
@@ -211,10 +210,10 @@ Meteor.neo4j = {
       }else if(this.allowClientQuery === true && Meteor.isClient){
         Meteor.call('Neo4jRun', uid, query, opts, new Date(), function(error) {
           if (error) {
-            throw new Meteor.Error('500', 'Calling method [Neo4jRun]', [error, query, opts].toString());
+            throw new Meteor.Error('500', 'Calling method [Neo4jRun]: ' + [error, query, opts].toString());
           }
         });
-        Session.set('neo4juids', _.union(Session.get('neo4juids'), [uid]));
+        Meteor.neo4j.uids.set(_.union(Meteor.neo4j.uids.get(), [uid]));
       }
     }
 
@@ -391,7 +390,7 @@ Meteor.neo4j = {
         created: date
       }, function(error) {
         if (error) {
-          throw new Meteor.Error('500', 'Neo4jCacheCollection.upsert: [Meteor.neo4j.cache.put]', [uid, data, queryString, opts, date].toString());
+          throw new Meteor.Error('500', 'Neo4jCacheCollection.upsert: [Meteor.neo4j.cache.put]: ' + [error, uid, data, queryString, opts, date].toString());
         }
       });
     } : undefined
@@ -475,8 +474,17 @@ Meteor.neo4j = {
    *
    */
   parseReturn: (Meteor.isServer) ? function(data, queryString){
-    var i,
-        _res,
+    data = data.map(function (result){
+      _.each(result, function(value, key, list){
+        if(key.indexOf('.') !== -1){
+          list[key.replace('.', '_')] = value;
+          delete list[key];
+        }
+      });
+      return result;
+    });
+
+    var _res,
         _data = data,
         _originals = [],
         _clauses,
@@ -488,6 +496,12 @@ Meteor.neo4j = {
         _data = {};
         _res = queryString.replace(/.*return /i,'').trim();
         _res = _res.split(',');
+
+        for (var i = _res.length - 1; i >= 0; i--) {
+          if(_res[i].indexOf('.') !== -1){
+            _res[i] = _res[i].replace('.', '_');
+          }
+        }
 
         _res = _res.map(function(str){ 
           str = str.trim(); 
@@ -562,7 +576,7 @@ Meteor.neo4j = {
    *
    */
   parseSensitivities: (Meteor.isServer) ? function(query, opts){
-    var _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'|:[^\'\"](\w*)/gi);
+    var _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'|:[^\'\"\ ](\w*)/gi);
     var matches, result = [];
     while(matches = _n.exec(query)){ 
       if(matches[0]){
@@ -595,7 +609,7 @@ Meteor.neo4j = {
    * @returns {string} record uid
    *
    */
-  methods: (Meteor.isServer) ?  function(methods){
+  methods: (Meteor.isServer) ? function(methods){
     var _methods = {};
 
     _.forEach(methods, function(query, methodName){
@@ -630,9 +644,9 @@ Meteor.neo4j = {
   call: (Meteor.isClient) ? function(methodName, opts, callback){
     Meteor.call(methodName, opts, function(error, uid){
       if(error){
-        throw new Meteor.Error('500', '[Meteor.neo4j.call] Method: ["' + methodName + '"] returns error!', error);
+        throw new Meteor.Error('500', '[Meteor.neo4j.call] Method: ["' + methodName + '"] returns error! | ' + [error].toString());
       }else{
-        Session.set('neo4juids', _.union(Session.get('neo4juids'), [uid]));
+        Meteor.neo4j.uids.set(_.union(Meteor.neo4j.uids.get(), [uid]));
         return Meteor.neo4j.cache.get(uid, callback);
       }
     });
@@ -642,11 +656,11 @@ Meteor.neo4j = {
 
 /*
  *
- * @description Create neo4juids Session
+ * @description Create Meteor.neo4j.uids ReactiveVar
  *
  */
 if(Meteor.isClient){
-  Session.setDefault('neo4juids', []);
+  Meteor.neo4j.uids = new ReactiveVar([]);
 }
 
 /*
