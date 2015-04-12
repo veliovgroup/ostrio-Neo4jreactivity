@@ -1,4 +1,7 @@
 if Meteor.isServer
+  ###
+  # @var {object} bound - Meteor.bindEnvironment aka Fiber wrapper
+  ###
   bound = Meteor.bindEnvironment((callback) ->
     return callback()
   )
@@ -50,7 +53,7 @@ Meteor.neo4j =
   # @name publish
   # @description Publish Mongo like `neo4j` collection
   # @param {name} String - Name of collection/publish/subscription
-  # @param {dunc} Function - Function with return Cypher query string, like: 
+  # @param {func} Function - Function with return Cypher query string, like: 
   #                          "return 'MATCH (a:User {name: {userName}}) RETURN a';"
   #
   ###
@@ -194,6 +197,18 @@ Meteor.neo4j =
       query = query.replace('{' + key + '}', value).replace('{ ' + key + ' }', value)
     query
 
+  ###
+  #
+  # @function
+  # @namespace neo4j
+  # @name query
+  # @param query {string}      - Cypher query
+  # @param opts {object}       - A map of parameters for the Cypher query
+  # @param callback {function} - Callback function(error, data){...}
+  # @description Isomorphic Cypher query call
+  # @returns {object} | With get() method [REACTIVE DATA SOURCE]
+  #
+  ###
   query: (query, opts, callback) ->
     if opts
       query = @mapParameters query, opts
@@ -429,6 +444,20 @@ Meteor.neo4j =
   ) else undefined
 
 
+  ###
+  # @function
+  # @namespace neo4j
+  # @name methods
+  # @param methods {object} - Object of methods, like: 
+  #                           {
+  #                              methodName: function(){ 
+  #                                return 'MATCH (a:User {name: {userName}}) RETURN a';
+  #                              } 
+  #                           }
+  # @description Create server methods to send query to neo4j database
+  # @returns {string} record uid
+  #
+  ###
   methods: if Meteor.isServer then ((methods) ->
     self = @
     _methods = {}
@@ -454,6 +483,20 @@ Meteor.neo4j =
     Meteor.methods _methods
   ) else undefined
 
+  ###
+  #
+  # @function
+  # @namespace neo4j
+  # @name call
+  # @param methodName {string}   - method name registered via neo4j.methods() method
+  # @param opts {object|null}    - [NOT REQUIRED] A map of parameters for the Cypher query. 
+  #                                Like: {userName: 'Joe'}, for query like: MATCH (a:User {name: {userName}}) RETURN a
+  # @param callback {function}   - Callback function(error, data){...}.
+  # @description Call for server method registered via neo4j.methods() method, 
+  #              returns error, data via callback.
+  # @returns {object} | With get() method [REACTIVE DATA SOURCE]
+  #
+  ###
   call: if Meteor.isClient then ((methodName, opts, name, link) ->
     for param in arguments
       callback = param if _.isFunction param
@@ -467,18 +510,14 @@ Meteor.neo4j =
   ) else undefined
 
 ###
-#
 # @description Create Meteor.neo4j.uids ReactiveVar
-#
 ###
 if Meteor.isClient
   Meteor.neo4j.uids = new ReactiveVar []
 
 ###
-#
 # @property connectionURL {string} - url to Neo4j database
 # @description Set connection URL to Neo4j Database
-#
 ###
 connectionURL = null
 Object.defineProperty Meteor.neo4j, 'connectionURL',
@@ -497,8 +536,6 @@ Object.defineProperty Meteor.neo4j, 'connectionURL',
 
 if Meteor.isServer
   ###
-  #
   # @description Initialize connection to Neo4j
-  #
   ###
   Meteor.neo4j.init()
