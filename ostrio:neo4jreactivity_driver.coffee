@@ -1,15 +1,16 @@
 if Meteor.isServer
   ###
+  # @server
   # @var {object} bound - Meteor.bindEnvironment aka Fiber wrapper
   ###
-  bound = Meteor.bindEnvironment((callback) ->
+  bound = Meteor.bindEnvironment (callback) ->
     return callback()
-  )
+
   Meteor.N4JDB = {}
   @N4JDB = Meteor.N4JDB
 
 ###
-#
+# @isomorphic
 # @object
 # @namespace Meteor
 # @name neo4j
@@ -21,16 +22,23 @@ Meteor.neo4j =
   resultsCache: {}
   collections: {}
   onSubscribes: {}
-
+  ###
+  # @isomorphic
+  # @namespace neo4j
+  # @property allowClientQuery {Boolean}
+  # @description Set to true to allow run queries from client
+  #              Please, do not forget about security and 
+  #              at least run Meteor.neo4j.set.deny(Meteor.neo4j.rules.write)
+  ###
   allowClientQuery: false
 
   ###
-  #
-  # @object
-  # @namespace Meteor
+  # @isomorphic
+  # @function
+  # @namespace neo4j
   # @name collection
   # @description Create Mongo like `neo4j` collection
-  # @param {name} String - Name of collection/publish/subscription
+  # @param name {String} - Name of collection/publish/subscription
   #
   ###
   collection: (name) ->
@@ -48,12 +56,12 @@ Meteor.neo4j =
 
   ###
   # @server
-  # @object
-  # @namespace Meteor
+  # @function
+  # @namespace neo4j
   # @name publish
   # @description Publish Mongo like `neo4j` collection
-  # @param {name} String - Name of collection/publish/subscription
-  # @param {func} Function - Function with return Cypher query string, like: 
+  # @param name {String}   - Name of collection/publish/subscription
+  # @param func {Function} - Function with return Cypher query string, like: 
   #                          "return 'MATCH (a:User {name: {userName}}) RETURN a';"
   #
   ###
@@ -66,8 +74,8 @@ Meteor.neo4j =
 
   ###
   # @client
-  # @object
-  # @namespace Meteor
+  # @function
+  # @namespace neo4j
   # @name subscribe
   # @description Create Mongo like `neo4j` collection
   # @param {name} String - Name of collection/publish/subscription
@@ -94,6 +102,19 @@ Meteor.neo4j =
     }
   ) else undefined
 
+  ###
+  # @isomorphic
+  # @function
+  # @namespace neo4j
+  # @name mapLink
+  # @description Create Mongo like `neo4j` collection
+  # @param {name} String - Name of collection/publish/subscription
+  # @param opts {object|null}    - [NOT REQUIRED] A map of parameters for the Cypher query. 
+  #                                Like: {userName: 'Joe'}, for query: 
+  #                                "MATCH (a:User {name: {userName}}) RETURN a"
+  # @param {link} String - Sub object name, like 'user' for query: "MATCH (user {_id: '183091'}) RETURN user"
+  #
+  ###
   mapLink: (name, data, link) ->
     if data and not link
       keys = _.keys data
@@ -113,12 +134,34 @@ Meteor.neo4j =
       _.each data[link], (value) ->
         Meteor.neo4j.collections[name].insert value
 
+  ###
+  # @isomorphic
+  # @function
+  # @namespace neo4j
+  # @name search
+  # @param regexp   {RegExp}   - Regular Expression
+  # @param string   {String}   - Haystack
+  # @param callback {Function} - (OPTIONAL) Callback function(error, data) 
+  # @description do search by RegExp in string
+  # @returns {Boolean}
+  #
+  ###
   search: (regexp, string, callback) ->
     if string and string.search(regexp) != -1
       if callback then callback(true) else true
     else
       if callback then callback(false) else false
 
+  ###
+  # @isomorphic
+  # @function
+  # @namespace neo4j
+  # @name check
+  # @param query {String} - Cypher query
+  # @description Check query for forbidden operators
+  # @returns {undefined} or {throw new Meteor.Error(...)}
+  #
+  ###
   check: (query) ->
     if Meteor.isClient
       _n = undefined
@@ -127,6 +170,18 @@ Meteor.neo4j =
         Meteor.neo4j.search _n, query, (isFound) ->
           if isFound
             throw new Meteor.Error '401', '[Meteor.neo4j.check] "' + value + '" is not allowed! | ' + [ query ].toString()
+
+  ###
+  # @isomorphic
+  # @object
+  # @namespace neo4j
+  # @name rules
+  # @property allow {Array}  - Array of allowed Cypher operators
+  # @property deny  {Array}  - Array of forbidden Cypher operators
+  # @property write {Array}  - Array of write Cypher operators
+  # @description Bunch of Cypher operators
+  #
+  ###
   rules:
     allow: [
       'RETURN'
@@ -169,7 +224,24 @@ Meteor.neo4j =
       'MERGE'
     ]
 
+
+  ###
+  # @isomorphic
+  # @object
+  # @namespace neo4j
+  # @name set
+  # @description Methods to set allow/deny operators
+  #
+  ###
   set:
+    ###
+    # @isomorphic
+    # @function
+    # @namespace neo4j.set
+    # @name allow
+    # @param rules {Array} - Array of Cypher operators to be allowed in app
+    #
+    ###
     allow: (rules) ->
       if rules == '*'
         Meteor.neo4j.rules.allow = _.union(Meteor.neo4j.rules.allow, Meteor.neo4j.rules.deny)
@@ -178,6 +250,15 @@ Meteor.neo4j =
         rules = @apply(rules)
         Meteor.neo4j.rules.allow = _.union(Meteor.neo4j.rules.allow, rules)
         Meteor.neo4j.rules.deny = _.difference(Meteor.neo4j.rules.deny, rules)
+
+    ###
+    # @isomorphic
+    # @function
+    # @namespace neo4j.set
+    # @name deny
+    # @param rules {Array} - Array of Cypher operators to be forbidden in app
+    #
+    ###
     deny: (rules) ->
       if rules == '*'
         Meteor.neo4j.rules.deny = _.union(Meteor.neo4j.rules.allow, Meteor.neo4j.rules.deny)
@@ -186,11 +267,31 @@ Meteor.neo4j =
         rules = @apply(rules)
         Meteor.neo4j.rules.deny = _.union(Meteor.neo4j.rules.deny, rules)
         Meteor.neo4j.rules.allow = _.difference(Meteor.neo4j.rules.allow, rules)
+
+    ###
+    # @isomorphic
+    # @function
+    # @namespace neo4j.set
+    # @name apply
+    # @param rules {Array} - fix lowercased operators
+    #
+    ###
     apply: (rules) ->
       for k of rules
         rules[k] = rules[k].toUpperCase()
       rules
 
+  ###
+  # @isomorphic
+  # @function
+  # @namespace neo4j
+  # @name mapParameters
+  # @param query {String} - Cypher query
+  # @param opts  {Object} - A map of parameters for the Cypher query
+  # @description Isomorphic mapParameters for Neo4j query
+  # @returns {String} - query with replaced map of parameters
+  #
+  ###
   mapParameters: (query, opts) ->
     _.forEach opts, (value, key) ->
       value = if !isNaN(value) then value else '"' + value + '"'
@@ -198,7 +299,7 @@ Meteor.neo4j =
     query
 
   ###
-  #
+  # @isomorphic
   # @function
   # @namespace neo4j
   # @name query
@@ -231,15 +332,45 @@ Meteor.neo4j =
         Meteor.neo4j.uids.set _.union(Meteor.neo4j.uids.get(), [ uid ])
     @cache.get uid, callback
 
+  ###
+  # @isomorphic
+  # @function
+  # @namespace neo4j
+  # @name isWrite
+  # @param query {String} - Cypher query
+  # @description Returns true if `query` writing/changing/removing data
+  # @returns {Boolean}
+  #
+  ###
   isWrite: (query) ->
     _n = new RegExp '(' + @rules.write.join('|') + '*)', 'gi'
     @search _n, query
 
+  ###
+  # @isomorphic
+  # @function
+  # @namespace neo4j
+  # @name isRead
+  # @param query {String} - Cypher query
+  # @description Returns true if `query` only reading
+  # @returns {Boolean}
+  #
+  ###
   isRead: (query) ->
     _n = new RegExp '(' + @rules.write.join('|') + '*)', 'gi'
     !@search _n, query
 
   cache:
+    ###
+    # @isomorphic
+    # @function
+    # @namespace neo4j.cache
+    # @name getObject
+    # @param uid {String} - Unique hashed ID of the query
+    # @description Get cached response by UID
+    # @returns object
+    #
+    ###
     getObject: (uid) ->
       if Meteor.neo4j.allowClientQuery == true and Meteor.isClient or Meteor.isServer
         cache = Neo4jCacheCollection.find(uid: uid)
@@ -275,6 +406,17 @@ Meteor.neo4j =
               result.get()
           }
 
+    ###
+    # @isomorphic
+    # @function
+    # @namespace neo4j.cache
+    # @name get
+    # @param uid      {String}   - Unique hashed ID of the query
+    # @param callback {Function} - Callback function(error, data){...}.
+    # @description Get cached response by UID
+    # @returns object
+    #
+    ###
     get: (uid, callback) ->
       if Meteor.neo4j.allowClientQuery == true and Meteor.isClient
         if callback
@@ -291,6 +433,19 @@ Meteor.neo4j =
             callback null, Neo4jCacheCollection.findOne(uid: uid).data
       Meteor.neo4j.cache.getObject uid
 
+    ###
+    # @isomorphic
+    # @function
+    # @namespace neo4j.cache
+    # @name put
+    # @param uid  {String}         - Unique hashed ID of the query
+    # @param data {Object}         - Data returned from neo4j (Cypher query response)
+    # @param queryString {String}  - Cypher query
+    # @param opts {Object}         - A map of parameters for the Cypher query
+    # @param date {Date}           - Creation date
+    # @description Upsert reactive mongo cache collection
+    #
+    ###
     put: if Meteor.isServer then ((uid, data, queryString, opts, date) ->
       Neo4jCacheCollection.upsert { uid: uid }, {
         uid: uid
@@ -312,6 +467,13 @@ Meteor.neo4j =
           ].toString()
     ) else undefined
 
+  ###
+  # @client
+  # @function
+  # @namespace neo4j
+  # @name init
+  # @description connect to neo4j DB and set listeners
+  ###
   init: if Meteor.isServer then ((url) ->
     if url and @connectionURL == null
       @connectionURL = url
@@ -343,6 +505,18 @@ Meteor.neo4j =
           )
   ) else undefined
 
+  ###
+  # @server
+  # @function
+  # @namespace neo4j
+  # @name run
+  # @param uid    {String} - Unique hashed ID of the query
+  # @param query  {String} - Cypher query
+  # @param opts   {Object} - A map of parameters for the Cypher query
+  # @param date   {Date}   - Creation date
+  # @description Run Cypher query, handle response with Fibers
+  #
+  ###
   run: if Meteor.isServer then ((uid, query, opts, date) ->
     @check query
     Meteor.N4JDB.query query, opts, (error, data) ->
@@ -360,6 +534,16 @@ Meteor.neo4j =
       )
   ) else undefined
 
+  ###
+  # @server
+  # @function
+  # @namespace neo4j
+  # @name parseReturn
+  # @param data {Object} - Cypher query response, neo4j database response
+  # @description Parse returned object from neo4j
+  # @returns {Object}
+  #
+  ###
   parseReturn: if Meteor.isServer then ((data, queryString) ->
     data = data.map (result) ->
       _.each result, (value, key, list) ->
@@ -428,7 +612,17 @@ Meteor.neo4j =
     _data
   ) else undefined
 
-
+  ###
+  # @server
+  # @function
+  # @namespace neo4j
+  # @name parseSensitivities
+  # @param query {String}  - Cypher query
+  # @param opts {Object}   - A map of parameters for the Cypher query.
+  # @description Parse Cypher query for sensitive data
+  # @returns {Array}
+  #
+  ###
   parseSensitivities: if Meteor.isServer then ((query, opts) ->
     _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'|:[^\'\"\ ](\w*)/gi)
     matches = undefined
@@ -445,17 +639,14 @@ Meteor.neo4j =
 
 
   ###
+  # @server
   # @function
   # @namespace neo4j
   # @name methods
-  # @param methods {object} - Object of methods, like: 
-  #                           {
-  #                              methodName: function(){ 
-  #                                return 'MATCH (a:User {name: {userName}}) RETURN a';
-  #                              } 
-  #                           }
+  # @param methods {Object} - Object of methods, like: 
+  #                              methodName: -> 
+  #                                return 'MATCH (a:User {name: {userName}}) RETURN a'
   # @description Create server methods to send query to neo4j database
-  # @returns {string} record uid
   #
   ###
   methods: if Meteor.isServer then ((methods) ->
@@ -484,17 +675,17 @@ Meteor.neo4j =
   ) else undefined
 
   ###
-  #
+  # @clinet
   # @function
   # @namespace neo4j
   # @name call
-  # @param methodName {string}   - method name registered via neo4j.methods() method
-  # @param opts {object|null}    - [NOT REQUIRED] A map of parameters for the Cypher query. 
+  # @param methodName {String}   - method name registered via neo4j.methods() method
+  # @param opts {Object|null}    - [NOT REQUIRED] A map of parameters for the Cypher query. 
   #                                Like: {userName: 'Joe'}, for query like: MATCH (a:User {name: {userName}}) RETURN a
   # @param callback {function}   - Callback function(error, data){...}.
   # @description Call for server method registered via neo4j.methods() method, 
   #              returns error, data via callback.
-  # @returns {object} | With get() method [REACTIVE DATA SOURCE]
+  # @returns {Object} | With get() method [REACTIVE DATA SOURCE]
   #
   ###
   call: if Meteor.isClient then ((methodName, opts, name, link) ->
@@ -516,7 +707,9 @@ if Meteor.isClient
   Meteor.neo4j.uids = new ReactiveVar []
 
 ###
-# @property connectionURL {string} - url to Neo4j database
+# @isomorphic
+# @namespace neo4j
+# @property connectionURL {String} - url to Neo4j database
 # @description Set connection URL to Neo4j Database
 ###
 connectionURL = null

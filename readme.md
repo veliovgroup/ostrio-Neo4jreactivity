@@ -1,5 +1,5 @@
 ## Neo4j DB reactive layer for Meteor
-**Neo4j reactivity** creates reactive and isomorphic layer between Neo4j and your Meteor based application. All *write* requests is synchronized between all clients. Please see this package on [atmospherejs.com](https://atmospherejs.com/ostrio/neo4jreactivity).
+**Neo4jreactivity** creates reactive and isomorphic layer between Neo4j and your Meteor based application. All **write** requests is synchronized between all clients. Please see this package on [atmospherejs.com](https://atmospherejs.com/ostrio/neo4jreactivity).
 
 ##### Example App
 The basic example is build on top of `--example leaderboard` - the [Meteor Leaderboard Neo4j Example App](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j) 
