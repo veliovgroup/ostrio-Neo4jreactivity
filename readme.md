@@ -16,7 +16,7 @@ meteor add ostrio:neo4jreactivity
     * Change line: `dbms.security.auth_enabled=true` (to false)
 
 
-### API
+## API
 __Note__: This is very important to use same names for same node types in all Cypher queries, cause the way Neo4jReactivity subscribes on data. For example if we would like to retrieve Users from Neo4j and update them later: 
   * `MATCH (usr {type: 'User'}) RETURN usr`
 
@@ -31,28 +31,28 @@ Of course Neo4jReactivity knows about Neo4j labels and use them for subscription
 to update: 
   * `MATCH (b:User {perms: 'guest'}) SET b.something = 2`
 
-- it will work but much better if you will use to retrieve: 
+it will work but much better if you will use to retrieve: 
   * `MATCH (user:User) RETURN a`
 
 and to update: 
   * `MATCH (user:User {perms: 'guest'}) SET user.something = 2`
 
-#### Isomorphic
-##### Meteor.neo4j.allowClientQuery
+### Isomorphic
+#### Meteor.neo4j.allowClientQuery
  * `allowClientQuery` {Boolean} - Allow/Deny Cypher queries execution on the client side
 ```javascript
 Meteor.neo4j.allowClientQuery = true;
 ```
-##### Meteor.neo4j.connectionURL = 'http://...';
+#### Meteor.neo4j.connectionURL = 'http://...';
 Set connection URL to Neo4j DataBase
-##### Meteor.neo4j.rules.write - Array of strings with Cypher write operators
-##### Meteor.neo4j.rules.read - Array of strings with Cypher read operators
-##### Meteor.neo4j.set.allow([rules]) - Set allowed Cypher operators for client side
+#### Meteor.neo4j.rules.write - Array of strings with Cypher write operators
+#### Meteor.neo4j.rules.read - Array of strings with Cypher read operators
+#### Meteor.neo4j.set.allow([rules]) - Set allowed Cypher operators for client side
  * `rules` {[String]} - Array of Cyphper query operators Strings
 
 ---
 
-##### Meteor.neo4j.set.deny([rules]) - Set denied Cypher operators for client side
+#### Meteor.neo4j.set.deny([rules]) - Set denied Cypher operators for client side
  * `rules` {[String]} - Array of Cyphper query operators Strings
 ```javascript
 /* Deny all write operations */
@@ -61,7 +61,7 @@ Meteor.neo4j.set.deny(Meteor.neo4j.rules.write);
 
 ---
 
-##### Meteor.neo4j.query(query, opts, callback)
+#### Meteor.neo4j.query(query, opts, callback)
 __Returns__ - reactive {Object} with `get()` method.
  * `query` {String} - Name of publish function. Please use same name in collection/publish/subscription
  * `opts` {Object} - A map of parameters for the Cypher query.
@@ -84,7 +84,7 @@ Meteor.neo4j.query('MATCH (p:Player {id: {_id}}) RETURN p', {_id: Meteor.userId(
 
 ---
 
-##### Meteor.neo4j.collection(name)
+#### Meteor.neo4j.collection(name)
  * `name` {String} - Name of collection. Please use same name in collection/publish/subscription
 Create MongoDB-like collection, **only** supported methods:
  * `find({})` - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/master/leaderboard.js#L23). Use to search thru returned data from Neo4j
@@ -97,8 +97,8 @@ var Players = Meteor.neo4j.collection('players');
 
 ---
 
-#### Server
-##### Meteor.neo4j.methods(object)
+### Server
+#### Meteor.neo4j.methods(object)
  * `object` {Object} - Object of method functions, which returns Cypher query string
 
 ###### [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/eabeaa853f634af59295680c5c7cf8dd9ac5437c/leaderboard.js#L98):
@@ -115,12 +115,12 @@ Meteor.neo4j.methods({
 
 ---
 
-##### Meteor.neo4j.publish(name, func, [onSubscribe])
+#### Meteor.neo4j.publish(name, func, [onSubscribe])
  * `name` {String} - Name of publish function. Please use same name in collection/publish/subscription
  * `func` {Function} - Function wich returns Cypher query string
  * `onSubscribe` {Function} - Callback which runs after each subscription
 
-###### Example:
+##### Example:
 ```javascript
 /* Create isomorphic collection */
 var Players = Meteor.neo4j.collection('players');
@@ -138,8 +138,8 @@ if (Meteor.isClient) {
 ```
 
 ---
-#### Client
-##### Meteor.neo4j.call(name, [[opts], [link].. ], callback)
+### Client
+#### Meteor.neo4j.call(name, [[opts], [link].. ], callback)
 Call for method registered via `Meteor.neo4j.methods`.
  * `name` {String} - Name of method function
  * `opts` {Object} - A map of parameters for the Cypher query.
@@ -153,7 +153,7 @@ Meteor.neo4j.call('removePlayer', {playerId: Session.get('selectedPlayer')});
 
 ---
 
-##### Meteor.neo4j.subscribe(name, [opts], [link])
+#### Meteor.neo4j.subscribe(name, [opts], [link])
  * `name` {String} - Name of subscribe function. Please use same name in collection/publish/subscription
  * `opts` {Object} - A map of parameters for the Cypher query.
  * `link` {String} - Sub object name, to link as MobgoDB row(s)
