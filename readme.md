@@ -1,49 +1,27 @@
-## Neo4j DB reactive layer for Meteor
+Neo4j DB reactive layer for Meteor
+=======
 **Neo4jreactivity** creates reactive and isomorphic layer between Neo4j and your Meteor based application. All **write** requests is synchronized between all clients. Please see this package on [atmospherejs.com](https://atmospherejs.com/ostrio/neo4jreactivity).
 
-##### Example App
+Example Application
+=======
 The basic example is build on top of `--example leaderboard` - the [Meteor Leaderboard Neo4j Example App](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j) 
 
 
-##### Install the driver
+Install the driver
+=======
 ```
 meteor add ostrio:neo4jreactivity
 ```
 
-##### Known issues:
+Known issues:
+=======
  - __[Error: Neo4jCacheCollection.upsert in v2.2.*](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/issues/22)__: - You need to disable default authentication in Neo4j-2.2.*:
     * Open file `/Your_Neo4j-2.2.0_install_path/conf/neo4j-server.properties`
     * Change line: `dbms.security.auth_enabled=true` (to false)
 
 
-## API
-__Note__: This is very important to use same names for same node types in all Cypher queries, cause the way Neo4jReactivity subscribes on data. For example if we would like to retrieve Users from Neo4j and update them later:
-```sql
-MATCH (usr {type: 'User'}) RETURN usr
-```
-to update use only `usr` alias for node: 
-```sql
-MATCH (usr {type: 'User', perms: 'guest'}) SET usr.something = 2
-```
-so data will be updated reactively.
-
-
-Of course Neo4jReactivity knows about Neo4j labels and use them for subscription too. With labels you may use different node's name aliases, __but it's not recommended__, to retrieve: 
-```sql
-MATCH (a:User) RETURN a
-```
-to update: 
-```sql
-MATCH (b:User {perms: 'guest'}) SET b.something = 2
-```
-it will work but much better if you will use to retrieve: 
-```sql
-MATCH (user:User) RETURN a
-```
-and to update: 
-```sql
-MATCH (user:User {perms: 'guest'}) SET user.something = 2
-```
+API
+=======
 
 ## Isomorphic
  * `Meteor.neo4j.allowClientQuery`
@@ -55,9 +33,8 @@ MATCH (user:User {perms: 'guest'}) SET user.something = 2
   - `rules` {[String]} - Array of Cyphper query operators Strings
  * `Meteor.neo4j.set.deny([rules])` - Set denied Cypher operators for client side
   - `rules` {[String]} - Array of Cyphper query operators Strings
-  - __Example__ to deny all write queries:
-    * `Meteor.neo4j.set.deny(Meteor.neo4j.rules.write)`
- * `Meteor.neo4j.query(query, opts, callback)` - __Returns__ - reactive {Object} with `get()` method.
+  - __Example__ to deny all write queries: `Meteor.neo4j.set.deny(Meteor.neo4j.rules.write)`
+ * `Meteor.neo4j.query(query, opts, callback)` - __Returns__ reactive {Object} with `get()` method.
   - `query` {String} - Name of publish function. Please use same name in collection/publish/subscription
   - `opts` {Object} - A map of parameters for the Cypher query.
   - `callback` {Function} - Callback which runs after each subscription
@@ -87,7 +64,7 @@ Call for method registered via `Meteor.neo4j.methods`.
   - `name` {String} - Name of method function
   - `opts` {Object} - A map of parameters for the Cypher query.
   - `callback` {function} - Returns `error` and `data` arguments. Data has `get()` method to get reactive data
-  - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/eabeaa853f634af59295680c5c7cf8dd9ac5437c/leaderboard.js#L30):
+  - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/eabeaa853f634af59295680c5c7cf8dd9ac5437c/leaderboard.js#L30)
  * `Meteor.neo4j.subscribe(name, [opts], [link])`
   - `name` {String} - Name of subscribe function. Please use same name in collection/publish/subscription
   - `opts` {Object} - A map of parameters for the Cypher query.
@@ -139,7 +116,36 @@ Call for method registered via `Meteor.neo4j.methods`.
   * `MERGE`
 ----------
 
-##### Usage examples:
+About reactive data and queries
+==========
+__Note__: This is very important to use same node's link names for same node types in all Cypher queries, cause the way Neo4jReactivity subscribes on data. For example if we would like to retrieve Users from Neo4j and update them later, so data will be updated reactively:
+```sql
+MATCH (usr {type: 'User'}) RETURN usr
+
+# To update use only `usr` alias for node: 
+MATCH (usr {type: 'User', perms: 'guest'}) SET usr.something = 2
+```
+
+Of course __Neo4jReactivity__ knows about Neo4j labels and use them for subscription too. With labels you may use different node's name aliases, __but it's not recommended__:
+```sql
+# To retrieve
+MATCH (a:User) RETURN a
+
+# To update: 
+MATCH (b:User {perms: 'guest'}) SET b.something = 2
+```
+
+It will work but much better if you will use: 
+```sql
+# To retrieve
+MATCH (user:User) RETURN user
+
+# To update: 
+MATCH (user:User {perms: 'guest'}) SET user.something = 2
+```
+
+Usage examples:
+==========
 ###### In Server Methods
 ```coffeescript
 #CoffeeScript
