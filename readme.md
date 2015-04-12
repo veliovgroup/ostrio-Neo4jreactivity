@@ -114,6 +114,7 @@ Call for method registered via `Meteor.neo4j.methods`.
   * `INDEX`
   * `DROP`
   * `MERGE`
+
 ----------
 
 About reactive data and queries
