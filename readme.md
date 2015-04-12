@@ -1,15 +1,8 @@
 ## Neo4j DB reactive layer for Meteor
-**Neo4j reactivity** creates mongodb layer between neo4j and your Meteor based application. All *write* requests is synchronized between all clients. Please see this package on [atmospherejs.com](https://atmospherejs.com/ostrio/neo4jreactivity) .
+**Neo4jreactivity** creates reactive and isomorphic layer between Neo4j and your Meteor based application. All **write** requests is synchronized between all clients. Please see this package on [atmospherejs.com](https://atmospherejs.com/ostrio/neo4jreactivity).
 
 ##### Example App
 The basic example is build on top of `--example leaderboard` - the [Meteor Leaderboard Neo4j Example App](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j) 
-
-##### Description
-Due to security lack we decide separate server side with queries, and client side with handlers via methods.
-
-To create method use ```Meteor.neo4j.methods({'object of functions'})``` with functions which returns query string (see example below).
-
-To call and handle database answer use: ```Meteor.neo4j.call('methodName', {'A map of parameters for the Cypher query'}, function(error, data){...})```
 
 
 ##### Install the driver
@@ -22,7 +15,206 @@ meteor add ostrio:neo4jreactivity
     * Open file `/Your_Neo4j-2.2.0_install_path/conf/neo4j-server.properties`
     * Change line: `dbms.security.auth_enabled=true` (to false)
 
-##### Usage example:
+
+## API
+__Note__: This is very important to use same names for same node types in all Cypher queries, cause the way Neo4jReactivity subscribes on data. For example if we would like to retrieve Users from Neo4j and update them later: 
+  * `MATCH (usr {type: 'User'}) RETURN usr`
+
+to update use only `usr` alias for node: 
+  * `MATCH (usr {type: 'User', perms: 'guest'}) SET usr.something = 2`
+
+so data will be updated reactively.
+
+Of course Neo4jReactivity knows about Neo4j labels and use them for subscription too. With labels you may use different node's name aliases, __but it's not recommended__, to retrieve: 
+  * `MATCH (a:User) RETURN a`
+
+to update: 
+  * `MATCH (b:User {perms: 'guest'}) SET b.something = 2`
+
+it will work but much better if you will use to retrieve: 
+  * `MATCH (user:User) RETURN a`
+
+and to update: 
+  * `MATCH (user:User {perms: 'guest'}) SET user.something = 2`
+
+### Isomorphic
+#### Meteor.neo4j.allowClientQuery
+ * `allowClientQuery` {Boolean} - Allow/Deny Cypher queries execution on the client side
+```javascript
+Meteor.neo4j.allowClientQuery = true;
+```
+#### Meteor.neo4j.connectionURL = 'http://...';
+Set connection URL to Neo4j DataBase
+#### Meteor.neo4j.rules.write - Array of strings with Cypher write operators
+#### Meteor.neo4j.rules.read - Array of strings with Cypher read operators
+#### Meteor.neo4j.set.allow([rules]) - Set allowed Cypher operators for client side
+ * `rules` {[String]} - Array of Cyphper query operators Strings
+
+---
+
+#### Meteor.neo4j.set.deny([rules]) - Set denied Cypher operators for client side
+ * `rules` {[String]} - Array of Cyphper query operators Strings
+```javascript
+/* Deny all write operations */
+Meteor.neo4j.set.deny(Meteor.neo4j.rules.write);
+```
+
+---
+
+#### Meteor.neo4j.query(query, opts, callback)
+__Returns__ - reactive {Object} with `get()` method.
+ * `query` {String} - Name of publish function. Please use same name in collection/publish/subscription
+ * `opts` {Object} - A map of parameters for the Cypher query.
+ * `callback` {Function} - Callback which runs after each subscription
+    * error {Object|null} - Error of Neo4j Cypher query execution or null
+    * data {Object|null} - Data or null from Neo4j Cypher query execution
+
+###### [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/eabeaa853f634af59295680c5c7cf8dd9ac5437c/leaderboard.js#L9):
+```javascript
+var Players = Meteor.neo4j.query('MATCH (p:Player) RETURN p, count(p), p.score ORDER BY p.score DESC');
+
+var Player;
+Meteor.neo4j.query('MATCH (p:Player {id: {_id}}) RETURN p', {_id: Meteor.userId()}, function(err, data){
+  if(err){
+    throw new Meteor.Error(err);
+  }
+  Player = data.get().p;
+});
+```
+
+---
+
+#### Meteor.neo4j.collection(name)
+ * `name` {String} - Name of collection. Please use same name in collection/publish/subscription
+Create MongoDB-like collection, **only** supported methods:
+ * `find({})` - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/master/leaderboard.js#L23). Use to search thru returned data from Neo4j
+    - `fetch()` - Use to fetch Cursor data
+
+##### [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/master/leaderboard.js#L10)
+```javascript
+var Players = Meteor.neo4j.collection('players');
+```
+
+---
+
+### Server
+#### Meteor.neo4j.methods(object)
+ * `object` {Object} - Object of method functions, which returns Cypher query string
+
+###### [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/eabeaa853f634af59295680c5c7cf8dd9ac5437c/leaderboard.js#L98):
+```javascript
+Meteor.neo4j.methods({
+  'addPlayer': function(){
+    return 'CREATE (a:Player {_id:"' + String.generate() + '", name: {userName}, score: 0})';
+  },
+  'removePlayer': function(){
+    return 'MATCH (a:Player {_id:{playerId}}) DELETE a';
+  }
+});
+```
+
+---
+
+#### Meteor.neo4j.publish(name, func, [onSubscribe])
+ * `name` {String} - Name of publish function. Please use same name in collection/publish/subscription
+ * `func` {Function} - Function wich returns Cypher query string
+ * `onSubscribe` {Function} - Callback which runs after each subscription
+
+##### Example:
+```javascript
+/* Create isomorphic collection */
+var Players = Meteor.neo4j.collection('players');
+
+if (Meteor.isClient) {
+  Meteor.neo4j.publish('players', function(){
+    return 'MATCH (a:Player) RETURN a ORDER BY a.score DESC';
+  }, function(){
+    /* onSubscribe callback */
+    if (Players.findOne({})) {
+      /*....*/
+    }
+  });
+}
+```
+
+---
+### Client
+#### Meteor.neo4j.call(name, [[opts], [link].. ], callback)
+Call for method registered via `Meteor.neo4j.methods`.
+ * `name` {String} - Name of method function
+ * `opts` {Object} - A map of parameters for the Cypher query.
+ * `callback` {function} - Returns `error` and `data` arguments. Data has `get()` method to get reactive data
+
+###### [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/eabeaa853f634af59295680c5c7cf8dd9ac5437c/leaderboard.js#L30):
+```javascript
+/* Create isomorphic collection */
+Meteor.neo4j.call('removePlayer', {playerId: Session.get('selectedPlayer')});
+```
+
+---
+
+#### Meteor.neo4j.subscribe(name, [opts], [link])
+ * `name` {String} - Name of subscribe function. Please use same name in collection/publish/subscription
+ * `opts` {Object} - A map of parameters for the Cypher query.
+ * `link` {String} - Sub object name, to link as MobgoDB row(s)
+
+###### [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/master/leaderboard.js#L15):
+```javascript
+/* Create isomorphic collection */
+var Players = Meteor.neo4j.collection('players');
+
+Tracker.autorun(function(){
+  /* For query like:'MATCH (a:Player) RETURN a ORDER BY a.score DESC', we link 'a' */
+  Meteor.neo4j.subscribe('players', null, 'a');
+});
+```
+
+----------
+### Predefined Cypher Operators:
+__Allow__:
+  * 'RETURN'
+  * 'MATCH'
+  * 'SKIP'
+  * 'LIMIT'
+  * 'OPTIONAL'
+  * 'ORDER BY'
+  * 'WITH'
+  * 'AS'
+  * 'WHERE'
+  * 'CONSTRAINT'
+  * 'UNWIND'
+  * 'DISTINCT'
+  * 'CASE'
+  * 'WHEN'
+  * 'THEN'
+  * 'ELSE'
+  * 'END'
+  * 'CREATE'
+  * 'UNIQUE'
+  * 'MERGE'
+  * 'SET'
+  * 'DELETE'
+  * 'REMOVE'
+  * 'FOREACH'
+  * 'ON'
+  * 'INDEX'
+  * 'USING'
+  * 'DROP'
+
+__Deny__: None
+
+__Write__:
+  * 'CREATE'
+  * 'SET'
+  * 'DELETE'
+  * 'REMOVE'
+  * 'INDEX'
+  * 'DROP'
+  * 'MERGE'
+
+----------
+
+##### Usage examples:
 ###### In Server Methods
 ```coffeescript
 #CoffeeScript
