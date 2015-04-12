@@ -40,9 +40,9 @@ and to update:
  - Isomorphic
     * Meteor.neo4j.allowClientQuery
       - `allowClientQuery` {Boolean} - Allow/Deny Cypher queries execution on the client side
-        ```javascript
-        Meteor.neo4j.allowClientQuery = true;
-        ```
+```javascript
+Meteor.neo4j.allowClientQuery = true;
+```
     * `Meteor.neo4j.connectionURL = 'http://...';` - Set connection URL to Neo4j DataBase
     * `Meteor.neo4j.rules.write` - Array of strings with Cypher write operators
     * `Meteor.neo4j.rules.read` - Array of strings with Cypher read operators
@@ -50,10 +50,10 @@ and to update:
       - `rules` {[String]} - Array of Cyphper query operators Strings
     * Meteor.neo4j.set.deny([rules]) - Set denied Cypher operators for client side
       - `rules` {[String]} - Array of Cyphper query operators Strings
-      ```javascript
-      /* Deny all write operations */
-      Meteor.neo4j.set.deny(Meteor.neo4j.rules.write);
-      ```
+```javascript
+/* Deny all write operations */
+Meteor.neo4j.set.deny(Meteor.neo4j.rules.write);
+```
     * `Meteor.neo4j.query(query, opts, callback)` - __Returns__ - reactive {Object} with `get()` method.
       - `query` {String} - Name of publish function. Please use same name in collection/publish/subscription
       - `opts` {Object} - A map of parameters for the Cypher query.
@@ -61,17 +61,17 @@ and to update:
         * error {Object|null} - Error of Neo4j Cypher query execution or null
         * data {Object|null} - Data or null from Neo4j Cypher query execution
       - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/eabeaa853f634af59295680c5c7cf8dd9ac5437c/leaderboard.js#L9):
-        ```javascript
-        var Players = Meteor.neo4j.query('MATCH (p:Player) RETURN p, count(p), p.score ORDER BY p.score DESC');
+```javascript
+var Players = Meteor.neo4j.query('MATCH (p:Player) RETURN p, count(p), p.score ORDER BY p.score DESC');
 
-        var Player;
-        Meteor.neo4j.query('MATCH (p:Player {id: {_id}}) RETURN p', {_id: Meteor.userId()}, function(err, data){
-          if(err){
-            throw new Meteor.Error(err);
-          }
-          Player = data.get().p;
-        });
-        ```
+var Player;
+Meteor.neo4j.query('MATCH (p:Player {id: {_id}}) RETURN p', {_id: Meteor.userId()}, function(err, data){
+  if(err){
+    throw new Meteor.Error(err);
+  }
+  Player = data.get().p;
+});
+```
 
 ---
 
