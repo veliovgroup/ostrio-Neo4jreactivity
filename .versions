@@ -1,7 +1,8 @@
+coffeescript@1.0.6
 http@1.1.0
 meteor@1.1.6
 ostrio:neo4jdriver@0.2.11
-ostrio:neo4jreactivity@0.6.0
+ostrio:neo4jreactivity@0.7.0
 reactive-var@1.0.5
 sha@1.0.3
 tracker@1.0.7
