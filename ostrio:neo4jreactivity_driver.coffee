@@ -317,7 +317,7 @@ Meteor.neo4j =
 
     @check query
     uid = Package.sha.SHA256 query
-    cached = Neo4jCacheCollection.find uid: uid
+    cached = Meteor.neo4j.cacheCollection.find uid: uid
     if cached.fetch().length == 0 or @isWrite(query)
       if Meteor.isServer
         @run uid, query, opts, new Date
@@ -373,10 +373,10 @@ Meteor.neo4j =
     ###
     getObject: (uid) ->
       if Meteor.neo4j.allowClientQuery == true and Meteor.isClient or Meteor.isServer
-        cache = Neo4jCacheCollection.find(uid: uid)
+        cache = Meteor.neo4j.cacheCollection.find(uid: uid)
         if Meteor.isServer
-          if Neo4jCacheCollection.findOne(uid: uid)
-            Meteor.neo4j.resultsCache['NEO4JRES_' + uid] = Neo4jCacheCollection.findOne(uid: uid).data
+          if Meteor.neo4j.cacheCollection.findOne(uid: uid)
+            Meteor.neo4j.resultsCache['NEO4JRES_' + uid] = Meteor.neo4j.cacheCollection.findOne(uid: uid).data
           cache.observe
             added: (doc) ->
               Meteor.neo4j.resultsCache['NEO4JRES_' + uid] = doc.data
@@ -391,8 +391,8 @@ Meteor.neo4j =
           }
         else
           result = new ReactiveVar null
-          if Neo4jCacheCollection.findOne(uid: uid)
-            result.set Neo4jCacheCollection.findOne(uid: uid).data
+          if Meteor.neo4j.cacheCollection.findOne(uid: uid)
+            result.set Meteor.neo4j.cacheCollection.findOne(uid: uid).data
           cache.observe
             added: (doc) ->
               result.set doc.data
@@ -421,16 +421,16 @@ Meteor.neo4j =
       if Meteor.neo4j.allowClientQuery == true and Meteor.isClient
         if callback
           Tracker.autorun ->
-            result = Neo4jCacheCollection.findOne(uid: uid)
+            result = Meteor.neo4j.cacheCollection.findOne(uid: uid)
             if result and result.data
               callback and callback null, result.data
       else
         if callback
-          if !Neo4jCacheCollection.findOne(uid: uid)
-            Neo4jCacheCollection.find(uid: uid).observe added: ->
-              callback null, Neo4jCacheCollection.findOne(uid: uid).data
+          if !Meteor.neo4j.cacheCollection.findOne(uid: uid)
+            Meteor.neo4j.cacheCollection.find(uid: uid).observe added: ->
+              callback null, Meteor.neo4j.cacheCollection.findOne(uid: uid).data
           else
-            callback null, Neo4jCacheCollection.findOne(uid: uid).data
+            callback null, Meteor.neo4j.cacheCollection.findOne(uid: uid).data
       Meteor.neo4j.cache.getObject uid
 
     ###
@@ -447,7 +447,7 @@ Meteor.neo4j =
     #
     ###
     put: if Meteor.isServer then ((uid, data, queryString, opts, date) ->
-      Neo4jCacheCollection.upsert { uid: uid }, {
+      Meteor.neo4j.cacheCollection.upsert { uid: uid }, {
         uid: uid
         data: Meteor.neo4j.parseReturn(data, queryString)
         query: queryString
@@ -457,7 +457,7 @@ Meteor.neo4j =
         created: date
       }, (error) ->
         if error
-          throw new Meteor.Error '500', 'Neo4jCacheCollection.upsert: [Meteor.neo4j.cache.put]: ' + [
+          throw new Meteor.Error '500', 'Meteor.neo4j.cacheCollection.upsert: [Meteor.neo4j.cache.put]: ' + [
             error
             uid
             data
@@ -489,14 +489,14 @@ Meteor.neo4j =
     # @description Listen for all requests to Neo4j
     # if request is writing/changing/removing data
     # we will find all sensitive data and update 
-    # all subscribed records at Neo4jCacheCollection
+    # all subscribed records at Meteor.neo4j.cacheCollection
     #
     ###
     Meteor.N4JDB.listen (query, opts) ->
       if Meteor.neo4j.isWrite(query)
         sensitivities = Meteor.neo4j.parseSensitivities(query, opts)
         if sensitivities
-          affectedRecords = Neo4jCacheCollection.find(
+          affectedRecords = Meteor.neo4j.cacheCollection.find(
             sensitivities: '$in': sensitivities
             type: 'READ')
           bound (->
