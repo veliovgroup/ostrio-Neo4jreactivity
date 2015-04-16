@@ -218,8 +218,8 @@ Meteor.neo4j.rules =
 Meteor.neo4j.allowClientQuery = true
 
 #Client code
-getAllUsers = () ->
-    return Session.get('allUsers', Meteor.neo4j.query('MATCH (a:User) RETURN a'));
+getAllUsers = ->
+    return Meteor.neo4j.query('MATCH (a:User) RETURN a').get();
 ```
 
 **For more info see: [neo4jdriver](https://github.com/VeliovGroup/ostrio-neo4jdriver) and [node-neo4j](https://github.com/thingdom/node-neo4j)**
