@@ -46,7 +46,7 @@ API
   Create MongoDB-like collection, **only** supported methods:
   - `find({})` - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/master/leaderboard.js#L23). Use to search thru returned data from Neo4j
     * `fetch()` - Use to fetch Cursor data
-  -[Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/master/leaderboard.js#L10)
+  - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/master/leaderboard.js#L10)
 
 ## Server
  * `Meteor.neo4j.methods(object)` - Create server Cypher queries
