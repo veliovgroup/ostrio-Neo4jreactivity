@@ -33,14 +33,14 @@ API
   - `rules` {[String]} - Array of Cyphper query operators Strings
  * `Meteor.neo4j.set.deny([rules])` - Set denied Cypher operators for client side
   - `rules` {[String]} - Array of Cyphper query operators Strings
-  - __Example__ to deny all write queries: `Meteor.neo4j.set.deny(Meteor.neo4j.rules.write)`
+  - For example to deny all write queries, use: `Meteor.neo4j.set.deny(Meteor.neo4j.rules.write)`
  * `Meteor.neo4j.query(query, opts, callback)` - __Returns__ reactive {Object} with `get()` method.
   - `query` {String} - Name of publish function. Please use same name in collection/publish/subscription
   - `opts` {Object} - A map of parameters for the Cypher query.
   - `callback` {Function} - Callback which runs after each subscription
     * `error` {Object|null} - Error of Neo4j Cypher query execution or null
     * `data` {Object|null} - Data or null from Neo4j Cypher query execution
-  - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/eabeaa853f634af59295680c5c7cf8dd9ac5437c/leaderboard.js#L9):
+  - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/eabeaa853f634af59295680c5c7cf8dd9ac5437c/leaderboard.js#L9)
  * `Meteor.neo4j.collection(name)`
   - `name` {String} - Name of collection. Please use same name in collection/publish/subscription
   Create MongoDB-like collection, **only** supported methods:
