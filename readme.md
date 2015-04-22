@@ -136,7 +136,7 @@ MATCH (a:User) RETURN a
 MATCH (b:User {perms: 'guest'}) SET b.something = 2
 ```
 
-It will work but much better if you will use: 
+It will work, but much better if you will use: 
 ```sql
 # To retrieve
 MATCH (user:User) RETURN user
@@ -226,8 +226,8 @@ getAllUsers = ->
 
 Code licensed under Apache v. 2.0: [node-neo4j License](https://github.com/thingdom/node-neo4j/blob/master/LICENSE) 
 
------
-##### Testing & Dev usage
+Testing & Dev usage
+===========
 ###### Local usage
 
  - Download (or clone) to local dir
@@ -237,9 +237,10 @@ Code licensed under Apache v. 2.0: [node-neo4j License](https://github.com/thing
  - Run ```meteor``` in a project dir
  - From now any changes in ostrio:neo4jreactivity package folder will cause rebuilding of project app
 
------
 
-##### Understanding the package
+
+Understanding the package
+===========
 After installing `ostrio:neo4jreactivity` package - you will have next variables:
  - `Meteor.Neo4j;`
  - `Meteor.N4JDB;`
