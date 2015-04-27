@@ -7,7 +7,6 @@ if Meteor.isServer
     return callback()
 
   Meteor.N4JDB = {}
-  @N4JDB = Meteor.N4JDB
 
 ###
 # @isomorphic

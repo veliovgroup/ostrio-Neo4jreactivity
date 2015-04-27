@@ -13,12 +13,6 @@ Install the driver
 meteor add ostrio:neo4jreactivity
 ```
 
-Known issues:
-=======
- - __[Error: Neo4jCacheCollection.upsert in v2.2.*](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/issues/22)__: - You need to disable default authentication in Neo4j-2.2.*:
-    * Open file `/Your_Neo4j-2.2.0_install_path/conf/neo4j-server.properties`
-    * Change line: `dbms.security.auth_enabled=true` (to false)
-
 
 API
 =======
@@ -252,8 +246,8 @@ After installing `ostrio:neo4jreactivity` package - you will have next variables
  * Server only
  * @class
  * @name Neo4j
- * @param url {string} - url to Neo4j database
- * Note: It’s better to store url in environment 
+ * @param url {string} - URL to Neo4j database
+ * Note: It’s better to store URL in environment 
  * variable, 'NEO4J_URL' or 'GRAPHENEDB_URL' - 
  * so it will be automatically picked up by our driver
  * 
@@ -284,7 +278,7 @@ Meteor.N4JDB.listen(function(query, opts){
  */
 Meteor.neo4j;
 Meteor.neo4j.allowClientQuery = true; /* Allow/deny client query executions */
-Meteor.neo4j.connectionURL = null; /* Set custom connection URL to Neo4j DB, Note: It’s better to store url in environment variable, 'NEO4J_URL' or 'GRAPHENEDB_URL' - so it will be automatically picked up by the driver */
+Meteor.neo4j.connectionURL = null; /* Set custom connection URL to Neo4j DB, Note: It’s better to store URL in environment variable, 'NEO4J_URL' or 'GRAPHENEDB_URL' - so it will be automatically picked up by the driver */
 ```
 
 `neo4j` object has multiple functions, you will use:
