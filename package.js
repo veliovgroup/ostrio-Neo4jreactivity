@@ -12,6 +12,7 @@ Package.onUse(function(api) {
   api.use(['underscore', 'sha', 'coffeescript'], ['client', 'server']);
   api.use(['tracker', 'reactive-var'], 'client');
   api.use('ostrio:neo4jdriver@0.2.12', 'server');
+  api.use('mongo', ['client', 'server']);
 });
 
 Npm.depends({
