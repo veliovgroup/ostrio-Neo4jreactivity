@@ -3,9 +3,8 @@
 @name neo4j
 @description Create application wide object `neo4j`
 ###
-if !@neo4j
+if !Meteor.neo4j
   Meteor.neo4j = {}
-  @neo4j = Meteor.neo4j
 
 ###
 @object
