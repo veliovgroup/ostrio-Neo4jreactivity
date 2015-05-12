@@ -59,9 +59,11 @@ Meteor.neo4j =
   # @namespace neo4j
   # @name publish
   # @description Publish Mongo like `neo4j` collection
-  # @param name {String}   - Name of collection/publish/subscription
-  # @param func {Function} - Function with return Cypher query string, like: 
-  #                          "return 'MATCH (a:User {name: {userName}}) RETURN a';"
+  # @param name {String}          - Name of collection/publish/subscription
+  # @param func {Function}        - Function with return Cypher query string, like: 
+  #                                 "return 'MATCH (a:User {name: {userName}}) RETURN a';"
+  # @param onSubscribe {Function} - Callback function triggered after
+  #                                 client is subscribed on published data
   #
   ###
   publish: if Meteor.isServer then ((name, func, onSubscribe) ->
@@ -77,11 +79,12 @@ Meteor.neo4j =
   # @namespace neo4j
   # @name subscribe
   # @description Create Mongo like `neo4j` collection
-  # @param {name} String - Name of collection/publish/subscription
-  # @param opts {object|null}    - [NOT REQUIRED] A map of parameters for the Cypher query. 
-  #                                Like: {userName: 'Joe'}, for query: 
-  #                                "MATCH (a:User {name: {userName}}) RETURN a"
-  # @param {link} String - Sub object name, like 'user' for query: "MATCH (user {_id: '183091'}) RETURN user"
+  # @param {name} String      - Name of collection/publish/subscription
+  # @param opts {object|null} - [NOT REQUIRED] A map of parameters for the Cypher query. 
+  #                             Like: {userName: 'Joe'}, for query: 
+  #                             "MATCH (a:User {name: {userName}}) RETURN a"
+  # @param {link} String      - Sub object name, like 'user' for query: 
+  #                             "MATCH (user {_id: '183091'}) RETURN user"
   #
   ###
   subscribe: if Meteor.isClient then ((name, opts, link = false) ->
@@ -417,7 +420,7 @@ Meteor.neo4j =
     #
     ###
     get: (uid, callback) ->
-      if Meteor.neo4j.allowClientQuery == true and Meteor.isClient
+      if Meteor.neo4j.allowClientQuery is true and Meteor.isClient
         if callback
           Tracker.autorun ->
             result = Meteor.neo4j.cacheCollection.findOne(uid: uid)
@@ -426,10 +429,12 @@ Meteor.neo4j =
       else
         if callback
           if !Meteor.neo4j.cacheCollection.findOne(uid: uid)
-            Meteor.neo4j.cacheCollection.find(uid: uid).observe added: ->
-              callback null, Meteor.neo4j.cacheCollection.findOne(uid: uid).data
+            Meteor.neo4j.cacheCollection.find(uid: uid).observe 
+              added: ->
+                callback null, Meteor.neo4j.cacheCollection.findOne(uid: uid).data
           else
             callback null, Meteor.neo4j.cacheCollection.findOne(uid: uid).data
+
       Meteor.neo4j.cache.getObject uid
 
     ###
@@ -446,7 +451,9 @@ Meteor.neo4j =
     #
     ###
     put: if Meteor.isServer then ((uid, data, queryString, opts, date) ->
-      Meteor.neo4j.cacheCollection.upsert { uid: uid }, {
+      Meteor.neo4j.cacheCollection.upsert
+        uid: uid
+      ,
         uid: uid
         data: Meteor.neo4j.parseReturn(data, queryString)
         query: queryString
@@ -454,16 +461,17 @@ Meteor.neo4j =
         opts: opts
         type: if Meteor.neo4j.isWrite(queryString) then 'WRITE' else 'READ'
         created: date
-      }, (error) ->
-        if error
-          throw new Meteor.Error '500', 'Meteor.neo4j.cacheCollection.upsert: [Meteor.neo4j.cache.put]: ' + [
-            error
-            uid
-            data
-            queryString
-            opts
-            date
-          ].toString()
+      , 
+        (error) ->
+          if error
+            throw new Meteor.Error '500', 'Meteor.neo4j.cacheCollection.upsert: [Meteor.neo4j.cache.put]: ' + [
+              error
+              uid
+              data
+              queryString
+              opts
+              date
+            ].toString()
     ) else undefined
 
   ###
@@ -492,16 +500,18 @@ Meteor.neo4j =
     #
     ###
     Meteor.N4JDB.listen (query, opts) ->
-      if Meteor.neo4j.isWrite(query)
-        sensitivities = Meteor.neo4j.parseSensitivities(query, opts)
+      if Meteor.neo4j.isWrite query
+        sensitivities = Meteor.neo4j.parseSensitivities query, opts
+
         if sensitivities
-          affectedRecords = Meteor.neo4j.cacheCollection.find(
-            sensitivities: '$in': sensitivities
-            type: 'READ')
-          bound (->
+          affectedRecords = Meteor.neo4j.cacheCollection.find
+            sensitivities: 
+              '$in': sensitivities
+            type: 'READ'
+
+          bound ->
             affectedRecords.forEach (value) ->
               Meteor.neo4j.run value.uid, value.query, value.opts, value.created
-          )
   ) else undefined
 
   ###
@@ -519,9 +529,9 @@ Meteor.neo4j =
   run: if Meteor.isServer then ((uid, query, opts, date) ->
     @check query
     Meteor.N4JDB.query query, opts, (error, data) ->
-      bound (->
+      bound ->
         if error
-          throw new Meteor.Error '500', 'Meteor.N4JDB.query: [Meteor.neo4j.run]: ' + [
+          throw new Meteor.Error '500', '[Meteor.neo4j.run]: ' + [
             error
             uid
             query
@@ -529,8 +539,7 @@ Meteor.neo4j =
             date
           ].toString()
         else
-          return Meteor.neo4j.cache.put(uid, data or null, query, opts, date)
-      )
+          return Meteor.neo4j.cache.put uid, data or null, query, opts, date
   ) else undefined
 
   ###
@@ -544,7 +553,7 @@ Meteor.neo4j =
   #
   ###
   parseReturn: if Meteor.isServer then ((data, queryString) ->
-    data = data.map (result) ->
+    _data = data.map (result) ->
       _.each result, (value, key, list) ->
         if key.indexOf('.') != -1
           list[key.replace('.', '_')] = value
@@ -552,10 +561,7 @@ Meteor.neo4j =
       result
 
     _res = undefined
-    _data = data
     _originals = []
-    _clauses = undefined
-    wait = undefined
     _n = new RegExp('return ', 'i')
     wait = @search _n, queryString, (isFound) ->
       if isFound
@@ -563,22 +569,24 @@ Meteor.neo4j =
         _res = queryString.replace(/.*return /i, '').trim()
         _res = _res.split(',')
         i = _res.length - 1
+
         while i >= 0
           if _res[i].indexOf('.') != -1
             _res[i] = _res[i].replace '.', '_'
           i--
-        _res = _res.map(((str) ->
+
+        _res = _res.map (str) ->
           str = str.trim()
           if str.indexOf(' AS ') != -1
             str = _.last str.split ' '
           str
-        ))
+
         _clauses = _.last(_res)
         if _clauses.indexOf(' ') != -1
           _clause = _.first _clauses.split ' '
           _res[_res.length - 1] = _clause
+
         for i of _res
-          `i = i`
           _res[i] = _res[i].trim()
           _originals[i] = _res[i]
           if _res[i].indexOf(' ') != -1
@@ -588,23 +596,24 @@ Meteor.neo4j =
 
         data.map (result) ->
           for i of _res
-            `i = i`
             if ! !result[_res[i]]
               if _res[i].indexOf('(') != -1 and _res[i].indexOf(')') != -1
                 _data[_res[i]] = result[_res[i]]
               else if _originals[i].indexOf('.') != -1 or _.isString(result[_res[i]]) or _.isNumber(result[_res[i]]) or _.isBoolean(result[_res[i]]) or _.isDate(result[_res[i]]) or _.isNaN(result[_res[i]]) or _.isNull(result[_res[i]]) or _.isUndefined(result[_res[i]])
                 _data[_res[i]].push result[_res[i]]
               else
-                if ! !result[_res[i]].data and ! !result[_res[i]]._data and ! !result[_res[i]]._data.metadata
+                if !!result[_res[i]].data and ! !result[_res[i]]._data and ! !result[_res[i]]._data.metadata
                   result[_res[i]].data.metadata = result[_res[i]]._data.metadata
-                if ! !result[_res[i]]._data and ! !result[_res[i]]._data.start and ! !result[_res[i]]._data.end and ! !result[_res[i]]._data.type
+
+                if !!result[_res[i]]._data and ! !result[_res[i]]._data.start and ! !result[_res[i]]._data.end and ! !result[_res[i]]._data.type
                   result[_res[i]].data.relation =
                     extensions: result[_res[i]]._data.extensions
                     start: _.last result[_res[i]]._data.start.split '/'
                     end: _.last result[_res[i]]._data.end.split '/'
                     self: _.last result[_res[i]]._data.self.split '/'
                     type: result[_res[i]]._data.type
-                if ! !result[_res[i]].data
+
+                if !!result[_res[i]].data
                   _data[_res[i]].push result[_res[i]].data
 
     @returns = _res
@@ -631,8 +640,7 @@ Meteor.neo4j =
         result.push matches[0].replace(/["']/gi, '')
     if opts
       _.forEach opts, (value, key) ->
-        result.push value
-        result.push key
+        result.push value, key
     result
   ) else undefined
 
