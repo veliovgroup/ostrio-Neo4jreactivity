@@ -14,8 +14,8 @@ meteor@1.1.6
 minimongo@1.0.8
 mongo@1.1.0
 ordered-dict@1.0.3
-ostrio:neo4jdriver@0.2.12
-ostrio:neo4jreactivity@0.7.2
+ostrio:neo4jdriver@0.2.13
+ostrio:neo4jreactivity@0.7.3
 random@1.0.3
 reactive-var@1.0.5
 retry@1.0.3
