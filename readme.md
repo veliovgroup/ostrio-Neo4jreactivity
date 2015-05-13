@@ -1,3 +1,5 @@
+[![Join the chat at https://gitter.im/VeliovGroup/ostrio-neo4jdriver](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/VeliovGroup/ostrio-neo4jdriver?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 Neo4j DB reactive layer for Meteor
 =======
 **Neo4jreactivity** creates reactive and isomorphic layer between Neo4j and your Meteor based application. All **write** requests is synchronized between all clients. Please see this package on [atmospherejs.com](https://atmospherejs.com/ostrio/neo4jreactivity).
