@@ -213,9 +213,11 @@ friends.subscribe 'allFriends', {userId: Meteor.userId()}, 'friends'
 ```
 
 ###### Template helper [*Client*]
+```coffeescript
 Template.friendsNamesList.helpers
   friends: ()->
     friends.find({})
+```
 
 ###### In Template:
 ```html
