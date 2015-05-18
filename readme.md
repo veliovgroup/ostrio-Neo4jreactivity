@@ -102,7 +102,7 @@ API
   - `name` {*String*} - Name of publish function. Please use same name in publish/subscription
   - `func` {*Function*} - Function wich returns Cypher query string
   - `onSubscribe` {*Function*} - Callback which runs after each subscription
-  - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/a6b467f43ccf20f39189e10b5d521fe12b4a55a2/leaderboard.js#L85)
+  - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/16c710c2ffac58691beb295a0c5f06c143cc9945/leaderboard.js#L76)
 
 ## Client
  * `Meteor.neo4j.call(name, [[opts], [link].. ], callback)` - Call server Neo4j method
@@ -111,7 +111,7 @@ Call for method registered via `Meteor.neo4j.methods`.
   - `opts` {*Object*} - A map of parameters for the Cypher query.
   - `callback` {*Function*} - Returns `error` and `data` arguments.
   - Returns {*Object*} - With `cursor` and reactive `get()` method
-  - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/16c710c2ffac58691beb295a0c5f06c143cc9945/leaderboard.js#L76)
+  - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/eabeaa853f634af59295680c5c7cf8dd9ac5437c/leaderboard.js#L39)
  * `Meteor.neo4j.subscribe(collectionName, name, [opts], [link])`
   - `collectionName` {*String*} - Collection name of method function
   - `name` {*String*} - Name of subscribe function. Please use same name in publish/subscription
