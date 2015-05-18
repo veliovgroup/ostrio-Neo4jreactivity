@@ -34,9 +34,10 @@ if Meteor.isServer
       false
 
   Meteor.publish 'Neo4jCacheCollection', (uids) ->
-    Meteor.neo4j.cacheCollection.find uid: '$in': uids
+    Meteor.neo4j.cacheCollection.find 
+      uid: 
+        '$in': uids
 
 if Meteor.isClient
   Tracker.autorun ->
     Meteor.subscribe 'Neo4jCacheCollection', Meteor.neo4j.uids.get()
-

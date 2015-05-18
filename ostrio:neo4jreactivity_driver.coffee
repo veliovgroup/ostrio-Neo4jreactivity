@@ -21,6 +21,8 @@ Meteor.neo4j =
   resultsCache: {}
   collections: {}
   onSubscribes: {}
+  subscriptions: {}
+
   ###
   # @isomorphic
   # @namespace neo4j
@@ -35,23 +37,107 @@ Meteor.neo4j =
   # @isomorphic
   # @function
   # @namespace neo4j
-  # @name collection
+  # @param collectionName {String} - Collection name
   # @description Create Mongo like `neo4j` collection
   # @param name {String} - Name of collection/publish/subscription
   #
   ###
-  collection: (name) ->
+  collection: (collectionName) ->
+    check collectionName, String
+
     collection = new Mongo.Collection null
-    delete collection.update
-    @collections[name] = collection
-    @collections[name].allow
+    @collections[collectionName] = {}
+    @collections[collectionName].isMapping = false
+    @collections[collectionName].collection = collection
+    @collections[collectionName].collection.allow
       update: () ->
-        false
+        true
       insert: () ->
         true
       remove: () ->
         true
+
+    cursor = collection.find {}
+    getLabels = (doc) ->
+      if _.isObject doc
+        labels = if doc.__labels and doc.__labels.indexOf(':') is 0 then doc.__labels else ''
+      else if _.isArray doc
+        labelsArr = []
+        _.each doc, (record) ->
+          if _.has record, '__labels'
+            labelsArr.push record.__labels
+        labelsArr = _.uniq labelsArr
+        labels = labels.join ''
+      else
+        labels = ''
+      return labels
+
+    if Meteor.isServer
+      cursor.observe
+        added: (doc) ->
+          labels = getLabels doc
+          if not Meteor.neo4j.collections[collectionName].isMapping
+            delete doc.__labels if _.has doc, '__labels'
+            delete doc.metadata if _.has doc, 'metadata'
+            Meteor.neo4j.query "MATCH (n#{labels} {_id: {_id}}) WITH count(n) AS count_n WHERE count_n <= 0 CREATE (n#{labels} {properties})", {properties: doc, _id: doc._id}
+          else
+            Meteor.neo4j.collections[collectionName].isMapping = false
+        changed: (doc, old) ->
+          labels = getLabels doc
+          if not Meteor.neo4j.collections[collectionName].isMapping
+            delete doc.__labels if _.has doc, '__labels'
+            delete doc.metadata if _.has doc, 'metadata'
+            Meteor.neo4j.query "MATCH (n#{labels} {_id: {_id}}) SET n = {properties}", {_id: old._id, properties: doc}
+          else
+            Meteor.neo4j.collections[collectionName].isMapping = false
+        removed: (doc) ->
+          labels = getLabels doc
+          if not Meteor.neo4j.collections[collectionName].isMapping
+            delete doc.__labels if _.has doc, '__labels'
+            delete doc.metadata if _.has doc, 'metadata'
+            Meteor.neo4j.query "MATCH (n#{labels} {_id: {_id}}) DELETE n", {_id: doc._id}
+          else
+            Meteor.neo4j.collections[collectionName].isMapping = false
+    else
+      cursor.observe
+        added: (doc) ->
+          labels = getLabels doc
+          if not Meteor.neo4j.collections[collectionName].isMapping
+            delete doc.__labels if _.has doc, '__labels'
+            delete doc.metadata if _.has doc, 'metadata'
+            Meteor.neo4j.call '___Neo4jObserveAdded', {properties: doc, _id: doc._id, __labels: labels}, (error) ->
+              return throw new Meteor.Error '500', '[___Neo4jObserveRemoved] | Error: ' + error.toString() if error
+          else
+            Meteor.neo4j.collections[collectionName].isMapping = false
+        changed: (doc, old) ->
+          labels = getLabels doc
+          if not Meteor.neo4j.collections[collectionName].isMapping
+            delete doc.__labels if _.has doc, '__labels'
+            delete doc.metadata if _.has doc, 'metadata'
+            Meteor.neo4j.call '___Neo4jObserveChanged', {_id: old._id, properties: doc, __labels: labels}, (error) ->
+              return throw new Meteor.Error '500', '[___Neo4jObserveRemoved] | Error: ' + error.toString() if error
+          else
+            Meteor.neo4j.collections[collectionName].isMapping = false
+        removed: (doc) ->
+          labels = getLabels doc
+          if not Meteor.neo4j.collections[collectionName].isMapping
+            delete doc.__labels if _.has doc, '__labels'
+            delete doc.metadata if _.has doc, 'metadata'
+            Meteor.neo4j.call '___Neo4jObserveRemoved', {_id: doc._id, __labels: labels}, (error) ->
+              return throw new Meteor.Error '500', '[___Neo4jObserveRemoved] | Error: ' + error.toString() if error
+          else
+            Meteor.neo4j.collections[collectionName].isMapping = false
+
+    if Meteor.isServer
+      collection.publish = (name, func, onSubscribe) ->
+        Meteor.neo4j.publish collectionName, name, func, onSubscribe
+
+    else
+      collection.subscribe = (name, opts, link = false) ->
+        Meteor.neo4j.subscribe collectionName, name, opts, link
+
     return collection
+
 
   ###
   # @server
@@ -59,17 +145,24 @@ Meteor.neo4j =
   # @namespace neo4j
   # @name publish
   # @description Publish Mongo like `neo4j` collection
-  # @param name {String}          - Name of collection/publish/subscription
-  # @param func {Function}        - Function with return Cypher query string, like: 
-  #                                 "return 'MATCH (a:User {name: {userName}}) RETURN a';"
-  # @param onSubscribe {Function} - Callback function triggered after
-  #                                 client is subscribed on published data
+  # @param collectionName {String} - Collection name
+  # @param name {String}           - Name of publish/subscription
+  # @param func {Function}         - Function with return Cypher query string, like: 
+  #                                  "return 'MATCH (a:User {name: {userName}}) RETURN a';"
+  # @param onSubscribe {Function}  - Callback function triggered after
+  #                                  client is subscribed on published data
   #
   ###
-  publish: if Meteor.isServer then ((name, func, onSubscribe) ->
+  publish: if Meteor.isServer then ((collectionName, name, func, onSubscribe) ->
+    check collectionName, String
+    check name, String
+    check func, Function
+    check onSubscribe, Match.Optional Function
+
     method = {}
-    method["Neo4jCache_#{name}"] = func
-    @onSubscribes["Neo4jCacheOnSubscribe_#{name}"] = onSubscribe
+    method["Neo4jReactiveMethod_#{collectionName}_#{name}"] = func
+    @subscriptions["#{collectionName}_#{name}"] = []
+    @onSubscribes["#{collectionName}_#{name}"] = onSubscribe
     @methods method
   ) else undefined
 
@@ -79,23 +172,30 @@ Meteor.neo4j =
   # @namespace neo4j
   # @name subscribe
   # @description Create Mongo like `neo4j` collection
-  # @param {name} String      - Name of collection/publish/subscription
-  # @param opts {object|null} - [NOT REQUIRED] A map of parameters for the Cypher query. 
-  #                             Like: {userName: 'Joe'}, for query: 
-  #                             "MATCH (a:User {name: {userName}}) RETURN a"
-  # @param {link} String      - Sub object name, like 'user' for query: 
-  #                             "MATCH (user {_id: '183091'}) RETURN user"
+  # @param collectionName {String} - Collection name
+  # @param name {String}           - Name of publish/subscription
+  # @param opts {object|null}      - [NOT REQUIRED] A map of parameters for the Cypher query. 
+  #                                  Like: {userName: 'Joe'}, for query: 
+  #                                  "MATCH (a:User {name: {userName}}) RETURN a"
+  # @param link {String}           - Sub object name, like 'user' for query: 
+  #                                  "MATCH (user {_id: '183091'}) RETURN user"
   #
   ###
-  subscribe: if Meteor.isClient then ((name, opts, link = false) ->
+  subscribe: if Meteor.isClient then ((collectionName, name, opts, link) ->
+    check collectionName, String
+    check name, String
+    check opts, Match.Optional Match.OneOf Object, null
+    check link, String
+
     self = @
     isReady = new ReactiveVar false
-    throw new Meteor.Error '404', "[Meteor.neo4j.subscribe] | Collection: #{name} not found! | Use Meteor.neo4j.collection(#{name}) to create collection" if not @collections[name]
+    throw new Meteor.Error '404', "[Meteor.neo4j.subscribe] | Collection: #{collectionName} not found! | Use Meteor.neo4j.collection(#{collectionName}) to create collection" if not Meteor.neo4j.collections[collectionName]
 
-    @call "Neo4jCache_#{name}", opts, name, link, (error, data) ->
+    @subscriptions["#{collectionName}_#{name}"] = []
+
+    @call "Neo4jReactiveMethod_#{collectionName}_#{name}", opts, collectionName, link, (error, data) ->
       throw new Meteor.Error '500', '[Meteor.neo4j.subscribe] | Error: ' + error.toString() if error
-      self.collections[name].remove {}
-      self.mapLink name, data, link
+      self.mapLink collectionName, data, link, "#{collectionName}_#{name}"
       isReady.set true
 
     return {
@@ -110,31 +210,62 @@ Meteor.neo4j =
   # @namespace neo4j
   # @name mapLink
   # @description Create Mongo like `neo4j` collection
-  # @param {name} String - Name of collection/publish/subscription
-  # @param opts {object|null}    - [NOT REQUIRED] A map of parameters for the Cypher query. 
-  #                                Like: {userName: 'Joe'}, for query: 
-  #                                "MATCH (a:User {name: {userName}}) RETURN a"
-  # @param {link} String - Sub object name, like 'user' for query: "MATCH (user {_id: '183091'}) RETURN user"
+  # @param collectionName {String} - Name of collection
+  # @param data {Object|null}      - Returned data from Neo4j
+  # @param link {String}           - Sub object name, like 'user' for query: "MATCH (user {_id: '183091'}) RETURN user"
+  # @param subsName {String}       - Subscription name - collection name + subscription/publish
   #
   ###
-  mapLink: (name, data, link) ->
-    if data and not link
-      keys = _.keys data
-      rows = {}
-      _.each keys, (element) ->
-        _.each data[element], (value, key) ->
-          if !rows[key]
-            rows[key] = {}
-          ext = {}
-          ext[element] = value
-          rows[key] = _.extend(rows[key], ext)
+  mapLink: (collectionName, data, link, subsName) ->
+    check collectionName, String
+    check data, Match.Optional Match.OneOf Object, null
+    check link, String
+    check subsName, String
 
-      _.each rows, (row) ->
-        Meteor.neo4j.collections[name].insert row
+    self = @
 
-    else if link and data[link]
-      _.each data[link], (value) ->
-        Meteor.neo4j.collections[name].insert value
+    if link and data[link]
+      if @subscriptions[subsName] and not _.isEmpty @subscriptions[subsName]
+        oldIds = _.map @subscriptions[subsName], (doc) ->
+          return doc._id
+
+        newIds = _.map data[link], (doc) ->
+          return doc._id
+
+        diff = _.difference oldIds, newIds
+        if diff and not _.isEmpty diff
+          self.collections[collectionName].isMapping = true
+          self.collections[collectionName].collection.remove
+            _id: 
+              $in: diff
+          ,
+           () ->
+            self.collections[collectionName].isMapping = false
+
+        self.subscriptions[subsName] = []
+
+      _.each data[link], (doc) ->
+        self.collections[collectionName].isMapping = true
+
+        if not doc._id
+          _id = Random.id()
+        else
+          _id = doc._id
+
+        doc._id = _id
+
+        self.subscriptions[subsName].push _.clone doc
+
+        delete doc._id
+        delete doc._data
+        delete doc.data
+        self.collections[collectionName].collection.upsert
+          _id: _id
+        , 
+          $set: doc
+        , 
+         () ->
+          self.collections[collectionName].isMapping = false
 
   ###
   # @isomorphic
@@ -165,9 +296,10 @@ Meteor.neo4j =
   #
   ###
   check: (query) ->
+    check query, String
     if Meteor.isClient
       _n = undefined
-      _.forEach @rules.deny, (value) ->
+      _.each @rules.deny, (value) ->
         _n = new RegExp(value + ' ', 'i')
         Meteor.neo4j.search _n, query, (isFound) ->
           if isFound
@@ -245,6 +377,8 @@ Meteor.neo4j =
     #
     ###
     allow: (rules) ->
+      check rules, Match.OneOf [String], '*'
+
       if rules == '*'
         Meteor.neo4j.rules.allow = _.union(Meteor.neo4j.rules.allow, Meteor.neo4j.rules.deny)
         Meteor.neo4j.rules.deny = []
@@ -262,6 +396,8 @@ Meteor.neo4j =
     #
     ###
     deny: (rules) ->
+      check rules, Match.OneOf [String], '*'
+
       if rules == '*'
         Meteor.neo4j.rules.deny = _.union(Meteor.neo4j.rules.allow, Meteor.neo4j.rules.deny)
         Meteor.neo4j.rules.allow = []
@@ -279,6 +415,8 @@ Meteor.neo4j =
     #
     ###
     apply: (rules) ->
+      check rules, Match.OneOf [String], '*'
+
       for k of rules
         rules[k] = rules[k].toUpperCase()
       rules
@@ -287,35 +425,18 @@ Meteor.neo4j =
   # @isomorphic
   # @function
   # @namespace neo4j
-  # @name mapParameters
-  # @param query {String} - Cypher query
-  # @param opts  {Object} - A map of parameters for the Cypher query
-  # @description Isomorphic mapParameters for Neo4j query
-  # @returns {String} - query with replaced map of parameters
-  #
-  ###
-  mapParameters: (query, opts) ->
-    _.forEach opts, (value, key) ->
-      value = if !isNaN(value) then value else '"' + value + '"'
-      query = query.replace('{' + key + '}', value).replace('{ ' + key + ' }', value)
-    query
-
-  ###
-  # @isomorphic
-  # @function
-  # @namespace neo4j
   # @name query
-  # @param query {string}      - Cypher query
-  # @param opts {object}       - A map of parameters for the Cypher query
-  # @param callback {function} - Callback function(error, data){...}
+  # @param query {String}      - Cypher query
+  # @param opts {Object}       - A map of parameters for the Cypher query
+  # @param callback {Function} - Callback function(error, data){...}
   # @description Isomorphic Cypher query call
-  # @returns {object} | With get() method [REACTIVE DATA SOURCE]
+  # @returns {Object} | With get() method [REACTIVE DATA SOURCE]
   #
   ###
   query: (query, opts, callback) ->
-    if opts
-      query = @mapParameters query, opts
-      opts = null
+    check query, String
+    check opts, Match.Optional Match.OneOf Object, null
+    check callback, Match.Optional Function
 
     @check query
     uid = Package.sha.SHA256 query
@@ -326,11 +447,11 @@ Meteor.neo4j =
       else if @allowClientQuery == true and Meteor.isClient
         Meteor.call 'Neo4jRun', uid, query, opts, new Date, (error) ->
           if error
-            throw new (Meteor.Error)('500', 'Calling method [Neo4jRun]: ' + [
+            throw new Meteor.Error '500', 'Calling method [Neo4jRun]: ' + [
               error
               query
               opts
-            ].toString())
+            ].toString()
         Meteor.neo4j.uids.set _.union(Meteor.neo4j.uids.get(), [ uid ])
     @cache.get uid, callback
 
@@ -345,6 +466,7 @@ Meteor.neo4j =
   #
   ###
   isWrite: (query) ->
+    check query, String
     _n = new RegExp '(' + @rules.write.join('|') + '*)', 'gi'
     @search _n, query
 
@@ -359,6 +481,7 @@ Meteor.neo4j =
   #
   ###
   isRead: (query) ->
+    check query, String
     _n = new RegExp '(' + @rules.write.join('|') + '*)', 'gi'
     !@search _n, query
 
@@ -374,6 +497,8 @@ Meteor.neo4j =
     #
     ###
     getObject: (uid) ->
+      check uid, String
+
       if Meteor.neo4j.allowClientQuery == true and Meteor.isClient or Meteor.isServer
         cache = Meteor.neo4j.cacheCollection.find(uid: uid)
         if Meteor.isServer
@@ -420,6 +545,9 @@ Meteor.neo4j =
     #
     ###
     get: (uid, callback) ->
+      check uid, String
+      check callback, Match.Optional Function
+
       if Meteor.neo4j.allowClientQuery is true and Meteor.isClient
         if callback
           Tracker.autorun ->
@@ -451,15 +579,22 @@ Meteor.neo4j =
     #
     ###
     put: if Meteor.isServer then ((uid, data, queryString, opts, date) ->
+      check uid, String
+      check data, Match.Optional [Object]
+      check queryString, String
+      check opts, Match.Optional Match.OneOf Object, null
+      check date, Date
+
+      parsedData = Meteor.neo4j.parseReturn data, queryString
       Meteor.neo4j.cacheCollection.upsert
         uid: uid
       ,
         uid: uid
-        data: Meteor.neo4j.parseReturn(data, queryString)
+        data: parsedData
         query: queryString
-        sensitivities: Meteor.neo4j.parseSensitivities(queryString, opts)
+        sensitivities: Meteor.neo4j.parseSensitivities queryString, opts, parsedData
         opts: opts
-        type: if Meteor.neo4j.isWrite(queryString) then 'WRITE' else 'READ'
+        type: if Meteor.neo4j.isWrite queryString then 'WRITE' else 'READ'
         created: date
       , 
         (error) ->
@@ -482,6 +617,7 @@ Meteor.neo4j =
   # @description connect to neo4j DB and set listeners
   ###
   init: if Meteor.isServer then ((url) ->
+    check url, Match.Optional String
     if url and @connectionURL == null
       @connectionURL = url
 
@@ -504,14 +640,14 @@ Meteor.neo4j =
         sensitivities = Meteor.neo4j.parseSensitivities query, opts
 
         if sensitivities
-          affectedRecords = Meteor.neo4j.cacheCollection.find
-            sensitivities: 
-              '$in': sensitivities
-            type: 'READ'
-
           bound ->
-            affectedRecords.forEach (value) ->
-              Meteor.neo4j.run value.uid, value.query, value.opts, value.created
+            affectedRecords = Meteor.neo4j.cacheCollection.find
+              sensitivities: 
+                '$in': sensitivities
+              type: 'READ'
+
+            affectedRecords.forEach (doc) ->
+              Meteor.neo4j.run doc.uid, doc.query, doc.opts, doc.created
   ) else undefined
 
   ###
@@ -527,6 +663,11 @@ Meteor.neo4j =
   #
   ###
   run: if Meteor.isServer then ((uid, query, opts, date) ->
+    check uid, String
+    check query, String
+    check opts, Match.Optional Match.OneOf Object, null
+    check date, Date
+
     @check query
     Meteor.N4JDB.query query, opts, (error, data) ->
       bound ->
@@ -547,12 +688,16 @@ Meteor.neo4j =
   # @function
   # @namespace neo4j
   # @name parseReturn
-  # @param data {Object} - Cypher query response, neo4j database response
+  # @param data {Object}        - Cypher query response, neo4j database response
+  # @param queryString {String} - Cypher query string
   # @description Parse returned object from neo4j
   # @returns {Object}
   #
   ###
   parseReturn: if Meteor.isServer then ((data, queryString) ->
+    check data, [Object]
+    check queryString, String
+
     _data = data.map (result) ->
       _.each result, (value, key, list) ->
         if key.indexOf('.') != -1
@@ -625,23 +770,34 @@ Meteor.neo4j =
   # @function
   # @namespace neo4j
   # @name parseSensitivities
-  # @param query {String}  - Cypher query
-  # @param opts {Object}   - A map of parameters for the Cypher query.
+  # @param query {String}     - Cypher query
+  # @param opts  {Object}     - A map of parameters for the Cypher query.
+  # @param parsedData {Array} - [Optional] Array of parsed objects returned from Neo4j
   # @description Parse Cypher query for sensitive data
   # @returns {Array}
   #
   ###
-  parseSensitivities: if Meteor.isServer then ((query, opts) ->
+  parseSensitivities: if Meteor.isServer then ((query, opts, parsedData) ->
+    check query, String
+    check opts, Match.Optional Match.OneOf Object, null
+
+    result = []
+    if parsedData and not _.isEmpty parsedData
+      _.each parsedData, (set) ->
+        _.each set, (doc) ->
+          if _.has doc, '_id'
+            result.push doc._id
+
     _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'|:[^\'\"\ ](\w*)/gi)
     matches = undefined
-    result = []
     while matches = _n.exec query
       if matches[0]
         result.push matches[0].replace(/["']/gi, '')
     if opts
-      _.forEach opts, (value, key) ->
-        result.push value, key
-    result
+      _.each opts, (value) ->
+        if _.isString value
+          result.push value
+    _.uniq result
   ) else undefined
 
 
@@ -651,30 +807,31 @@ Meteor.neo4j =
   # @namespace neo4j
   # @name methods
   # @param methods {Object} - Object of methods, like: 
-  #                              methodName: -> 
-  #                                return 'MATCH (a:User {name: {userName}}) RETURN a'
+  #                            methodName: -> 
+  #                              return 'MATCH (a:User {name: {userName}}) RETURN a'
   # @description Create server methods to send query to neo4j database
   #
   ###
   methods: if Meteor.isServer then ((methods) ->
+    check methods, Object
+
     self = @
     _methods = {}
-    _.forEach methods, (query, methodName) ->
-      _methods[methodName] = (opts, name, link) ->
-        _query = query()
-        if opts
-          _query = self.mapParameters _query, opts
-          opts = null
+    _.each methods, (query, methodName) ->
+      _methods[methodName] = (opts, collectionName, link) ->
+        _cmn = if methodName.indexOf('Neo4jReactiveMethod_') isnt -1 then methodName.replace 'Neo4jReactiveMethod_', '' else methodName
+        _query = query.call opts
+
         uid = Package.sha.SHA256 _query
-        if name
+        if collectionName
           self.query _query, opts, (error, data) ->
             throw new Meteor.Error '500', "[Meteor.neo4j.methods] | Error: " + error.toString() if error
-            throw new Meteor.Error '404', "[Meteor.neo4j.methods] | Collection: #{name} not found! | Use Meteor.neo4j.collection(#{name}) to create collection" if not self.collections[name]
-            self.collections[name].remove {}
-            self.mapLink name, data, link
+            throw new Meteor.Error '404', "[Meteor.neo4j.methods] | Collection: #{collectionName} not found! | Use Meteor.neo4j.collection(#{collectionName}) to create collection" if not self.collections[collectionName]
+            self.mapLink collectionName, data, link, _cmn
 
-          self.onSubscribes["Neo4jCacheOnSubscribe_#{name}"]() if self.onSubscribes["Neo4jCacheOnSubscribe_#{name}"] and _.isFunction self.onSubscribes["Neo4jCacheOnSubscribe_#{name}"]
+          self.onSubscribes[_cmn]() if self.onSubscribes[_cmn] and _.isFunction self.onSubscribes[_cmn]
         else
+
           self.query _query, opts
         return uid
 
@@ -689,13 +846,18 @@ Meteor.neo4j =
   # @param methodName {String}   - method name registered via neo4j.methods() method
   # @param opts {Object|null}    - [NOT REQUIRED] A map of parameters for the Cypher query. 
   #                                Like: {userName: 'Joe'}, for query like: MATCH (a:User {name: {userName}}) RETURN a
-  # @param callback {function}   - Callback function(error, data){...}.
+  # @param name {String}         - Collection name
+  # @param link {String}         - Sub object name, like 'user' for query: 
+  #                                "MATCH (user {_id: '183091'}) RETURN user"
   # @description Call for server method registered via neo4j.methods() method, 
   #              returns error, data via callback.
   # @returns {Object} | With get() method [REACTIVE DATA SOURCE]
   #
   ###
   call: if Meteor.isClient then ((methodName, opts, name, link) ->
+    check methodName, String
+    check opts, Match.Optional Match.OneOf Object, null
+
     for param in arguments
       callback = param if _.isFunction param
 
@@ -725,6 +887,7 @@ Object.defineProperty Meteor.neo4j, 'connectionURL',
     connectionURL
   set: (val) ->
     if val != connectionURL
+      check val, String
       connectionURL = val
       if Meteor.isServer
         Meteor.neo4j.init()
@@ -735,6 +898,19 @@ Object.defineProperty Meteor.neo4j, 'connectionURL',
 @neo4j = Meteor.neo4j
 
 if Meteor.isServer
+  ###
+  # @description Methods for reactive mini-neo4j
+  ###
+  Meteor.neo4j.methods
+    '___Neo4jObserveAdded': () ->
+      return "MATCH (n#{@__labels} {_id: {_id}}) WITH count(n) AS count_n WHERE count_n <= 0 CREATE (n#{@__labels} {properties})"
+
+    '___Neo4jObserveChanged': () ->
+      return "MATCH (n#{@__labels} {_id: {_id}}) SET n = {properties}"
+
+    '___Neo4jObserveRemoved': () ->
+      return "MATCH (n#{@__labels} {_id: {_id}}) DELETE n"
+
   ###
   # @description Initialize connection to Neo4j
   ###
