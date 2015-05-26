@@ -819,7 +819,6 @@ Meteor.neo4j =
     _methods = {}
     _.each methods, (query, methodName) ->
       _methods[methodName] = (opts, collectionName, link) ->
-        console.log opts, collectionName, link
         check opts, Match.Optional Match.OneOf Object, null
         check collectionName, Match.Optional Match.OneOf String, null
         check link, Match.Optional Match.OneOf String, null
