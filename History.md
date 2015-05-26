@@ -1,6 +1,12 @@
 Changelog
 =========
 
+### [0.8.1](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/releases/tag/v0.8.1)
+
+* Trying to fix issue described [here](https://github.com/VeliovGroup/ostrio-neo4jdriver/issues/11)
+* Remove colon from file names, to avoid Windows compilation issues
+* Support for `audit-argument-checks` package
+
 ### [0.8.0](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/releases/tag/v0.8.0)
 
 * Fix issue #43
