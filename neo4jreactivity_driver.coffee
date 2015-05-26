@@ -157,7 +157,7 @@ Meteor.neo4j =
     check collectionName, String
     check name, String
     check func, Function
-    check onSubscribe, Match.Optional Function
+    check onSubscribe, Match.Optional Match.OneOf Function, null
 
     method = {}
     method["Neo4jReactiveMethod_#{collectionName}_#{name}"] = func
@@ -436,7 +436,7 @@ Meteor.neo4j =
   query: (query, opts, callback) ->
     check query, String
     check opts, Match.Optional Match.OneOf Object, null
-    check callback, Match.Optional Function
+    check callback, Match.Optional Match.OneOf Function, null
 
     @check query
     uid = Package.sha.SHA256 query
@@ -546,7 +546,7 @@ Meteor.neo4j =
     ###
     get: (uid, callback) ->
       check uid, String
-      check callback, Match.Optional Function
+      check callback, Match.Optional Match.OneOf Function, null
 
       if Meteor.neo4j.allowClientQuery is true and Meteor.isClient
         if callback
@@ -580,7 +580,7 @@ Meteor.neo4j =
     ###
     put: if Meteor.isServer then ((uid, data, queryString, opts, date) ->
       check uid, String
-      check data, Match.Optional [Object]
+      check data, Match.Optional Match.OneOf [Object], null
       check queryString, String
       check opts, Match.Optional Match.OneOf Object, null
       check date, Date
@@ -617,7 +617,7 @@ Meteor.neo4j =
   # @description connect to neo4j DB and set listeners
   ###
   init: if Meteor.isServer then ((url) ->
-    check url, Match.Optional String
+    check url, Match.Optional Match.OneOf String, null
     if url and @connectionURL == null
       @connectionURL = url
 
@@ -636,11 +636,11 @@ Meteor.neo4j =
     #
     ###
     Meteor.N4JDB.listen (query, opts) ->
-      if Meteor.neo4j.isWrite query
-        sensitivities = Meteor.neo4j.parseSensitivities query, opts
+      bound ->
+        if Meteor.neo4j.isWrite query
+          sensitivities = Meteor.neo4j.parseSensitivities query, opts
 
-        if sensitivities
-          bound ->
+          if sensitivities
             affectedRecords = Meteor.neo4j.cacheCollection.find
               sensitivities: 
                 '$in': sensitivities
@@ -819,6 +819,11 @@ Meteor.neo4j =
     _methods = {}
     _.each methods, (query, methodName) ->
       _methods[methodName] = (opts, collectionName, link) ->
+        console.log opts, collectionName, link
+        check opts, Match.Optional Match.OneOf Object, null
+        check collectionName, Match.Optional Match.OneOf String, null
+        check link, Match.Optional Match.OneOf String, null
+
         _cmn = if methodName.indexOf('Neo4jReactiveMethod_') isnt -1 then methodName.replace 'Neo4jReactiveMethod_', '' else methodName
         _query = query.call opts
 

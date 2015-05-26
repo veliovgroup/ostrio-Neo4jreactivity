@@ -34,6 +34,7 @@ if Meteor.isServer
       false
 
   Meteor.publish 'Neo4jCacheCollection', (uids) ->
+    check uids, Match.Optional Match.OneOf [String], null
     Meteor.neo4j.cacheCollection.find 
       uid: 
         '$in': uids
