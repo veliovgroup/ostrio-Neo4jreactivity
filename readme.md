@@ -1,5 +1,26 @@
 [![Join the chat at https://gitter.im/VeliovGroup/ostrio-neo4jdriver](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/VeliovGroup/ostrio-neo4jdriver?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
+![Neo4j Reactivity Driver](https://raw.githubusercontent.com/VeliovGroup/ostrio-Neo4jreactivity/dev/logo-alt.png)
+
+ - [About](#neo4j-db-reactive-layer-for-meteor)
+ - [Example Application](#example-application)
+ - [Installation](#install-the-driver)
+ - [Notes](#several-notes)
+   * [TTL](#ttl)
+   * [Two ways to query Neo4j](#the-way-to-work-with-queries)
+ - [API](#api)
+   * [Isomorphic](#isomorphic)
+   * [Server](#server)
+   * [Client](#client)
+   * [Supported Cypher Operators](#predefined-cypher-operators)
+ - [More about reactive data](#about-reactive-data-and-queries)
+ - [Usage examples](#usage-examples)
+   * [As collection and publish/subscribe](#as-collection-and-publishsubscribe)
+   * [As methods/call](#as-methodscall)
+   * [Execute query on Client](#execute-query-on-client-side)
+ - [Test on your Dev stage](#testing--dev-usage)
+ - [Get deeper to understanding the package](#understanding-the-package)
+
 Neo4j DB reactive layer for Meteor
 =======
 **Neo4jreactivity** creates reactive and isomorphic layer between Neo4j and your Meteor based application. All **write** requests is synchronized between all clients. Please see this package on [atmospherejs.com](https://atmospherejs.com/ostrio/neo4jreactivity).

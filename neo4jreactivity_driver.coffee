@@ -770,11 +770,11 @@ Meteor.neo4j =
   # @function
   # @namespace neo4j
   # @name parseSensitivities
-  # @param query {String}     - Cypher query
-  # @param opts  {Object}     - A map of parameters for the Cypher query.
-  # @param parsedData {Array} - [Optional] Array of parsed objects returned from Neo4j
+  # @param query {String}        - Cypher query
+  # @param opts  {Object}        - [Optional] A map of parameters for the Cypher query.
+  # @param parsedData {[Object]} - [Optional] Array of parsed objects returned from Neo4j
   # @description Parse Cypher query for sensitive data
-  # @returns {Array}
+  # @returns {[String]}
   #
   ###
   parseSensitivities: if Meteor.isServer then ((query, opts, parsedData) ->
@@ -784,9 +784,10 @@ Meteor.neo4j =
     result = []
     if parsedData and not _.isEmpty parsedData
       _.each parsedData, (set) ->
-        _.each set, (doc) ->
-          if _.has doc, '_id'
-            result.push doc._id
+        if set and _.isObject set
+          _.each set, (doc) ->
+            if _.has doc, '_id'
+              result.push doc._id
 
     _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'|:[^\'\"\ ](\w*)/gi)
     matches = undefined

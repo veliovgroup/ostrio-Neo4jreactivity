@@ -1,6 +1,11 @@
 Changelog
 =========
 
+### [0.8.4](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/releases/tag/v0.8.4)
+
+* Fix issue [#48](https://github.com/VeliovGroup/ostrio-neo4jdriver/issues/48)
+* Add logo
+
 ### [0.8.1](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/releases/tag/v0.8.1)
 
 * Trying to fix issue described [here](https://github.com/VeliovGroup/ostrio-neo4jdriver/issues/11)
