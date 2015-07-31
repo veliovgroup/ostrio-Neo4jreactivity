@@ -59,18 +59,14 @@ Meteor.neo4j =
 
     cursor = collection.find {}
     getLabels = (doc) ->
-      if _.isObject doc
-        labels = if doc.__labels and doc.__labels.indexOf(':') is 0 then doc.__labels else ''
-      else if _.isArray doc
-        labelsArr = []
-        _.each doc, (record) ->
-          if _.has record, '__labels'
-            labelsArr.push record.__labels
-        labelsArr = _.uniq labelsArr
-        labels = labels.join ''
-      else
-        labels = ''
-      return labels
+      return switch
+        when _.isObject(doc) and !!doc.__labels and doc.__labels.indexOf(':') is 0 then doc.__labels
+        when _.isArray doc
+          labelsArr = (record.__labels for record in doc when _.has record, '__labels')
+          labelsArr = _.uniq labelsArr
+          labelsArr.join ''
+        else
+          ''
 
     if Meteor.isServer
       cursor.observe
@@ -106,7 +102,7 @@ Meteor.neo4j =
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.call '___Neo4jObserveAdded', {properties: doc, _id: doc._id, __labels: labels}, (error) ->
-              return throw new Meteor.Error '500', '[___Neo4jObserveRemoved] | Error: ' + error.toString() if error
+              return throw new Meteor.Error '500', '[___Neo4jObserveRemoved]', error if error
           else
             Meteor.neo4j.collections[collectionName].isMapping = false
         changed: (doc, old) ->
@@ -115,7 +111,7 @@ Meteor.neo4j =
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.call '___Neo4jObserveChanged', {_id: old._id, properties: doc, __labels: labels}, (error) ->
-              return throw new Meteor.Error '500', '[___Neo4jObserveRemoved] | Error: ' + error.toString() if error
+              return throw new Meteor.Error '500', '[___Neo4jObserveRemoved]', error if error
           else
             Meteor.neo4j.collections[collectionName].isMapping = false
         removed: (doc) ->
@@ -124,7 +120,7 @@ Meteor.neo4j =
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.call '___Neo4jObserveRemoved', {_id: doc._id, __labels: labels}, (error) ->
-              return throw new Meteor.Error '500', '[___Neo4jObserveRemoved] | Error: ' + error.toString() if error
+              return throw new Meteor.Error '500', '[___Neo4jObserveRemoved]', error if error
           else
             Meteor.neo4j.collections[collectionName].isMapping = false
 
@@ -187,15 +183,14 @@ Meteor.neo4j =
     check opts, Match.Optional Match.OneOf Object, null
     check link, String
 
-    self = @
     isReady = new ReactiveVar false
-    throw new Meteor.Error '404', "[Meteor.neo4j.subscribe] | Collection: #{collectionName} not found! | Use Meteor.neo4j.collection(#{collectionName}) to create collection" if not Meteor.neo4j.collections[collectionName]
+    throw new Meteor.Error '404', "[Meteor.neo4j.subscribe] | Collection: #{collectionName} not found! | Use Meteor.neo4j.collection(#{collectionName}) to create collection" if not @collections[collectionName]
 
     @subscriptions["#{collectionName}_#{name}"] = []
 
-    @call "Neo4jReactiveMethod_#{collectionName}_#{name}", opts, collectionName, link, (error, data) ->
-      throw new Meteor.Error '500', '[Meteor.neo4j.subscribe] | Error: ' + error.toString() if error
-      self.mapLink collectionName, data, link, "#{collectionName}_#{name}"
+    @call "Neo4jReactiveMethod_#{collectionName}_#{name}", opts, collectionName, link, (error, data) =>
+      throw new Meteor.Error '500', '[Meteor.neo4j.subscribe]', error if error
+      @mapLink collectionName, data, link, "#{collectionName}_#{name}"
       isReady.set true
 
     return {
@@ -222,50 +217,45 @@ Meteor.neo4j =
     check link, String
     check subsName, String
 
-    self = @
-
     if link and data[link]
       if @subscriptions[subsName] and not _.isEmpty @subscriptions[subsName]
-        oldIds = _.map @subscriptions[subsName], (doc) ->
-          return doc._id
-
-        newIds = _.map data[link], (doc) ->
-          return doc._id
+        oldIds = (doc._id for doc in @subscriptions[subsName])
+        newIds = (doc._id for doc in data[link])
 
         diff = _.difference oldIds, newIds
         if diff and not _.isEmpty diff
-          self.collections[collectionName].isMapping = true
-          self.collections[collectionName].collection.remove
+          @collections[collectionName].isMapping = true
+          @collections[collectionName].collection.remove
             _id: 
               $in: diff
           ,
-           () ->
-            self.collections[collectionName].isMapping = false
+           () =>
+            @collections[collectionName].isMapping = false
 
-        self.subscriptions[subsName] = []
+        @subscriptions[subsName] = []
 
-      _.each data[link], (doc) ->
-        self.collections[collectionName].isMapping = true
+      _.each data[link], (doc) =>
+        @collections[collectionName].isMapping = true
 
         if not doc._id
           _id = Random.id()
         else
           _id = doc._id
 
-        doc._id = _id
+        doc._id = _.clone _id
 
-        self.subscriptions[subsName].push _.clone doc
+        @subscriptions[subsName].push _.clone doc
 
         delete doc._id
         delete doc._data
         delete doc.data
-        self.collections[collectionName].collection.upsert
+        @collections[collectionName].collection.upsert
           _id: _id
         , 
           $set: doc
         , 
-         () ->
-          self.collections[collectionName].isMapping = false
+         () =>
+          @collections[collectionName].isMapping = false
 
   ###
   # @isomorphic
@@ -299,11 +289,11 @@ Meteor.neo4j =
     check query, String
     if Meteor.isClient
       _n = undefined
-      _.each @rules.deny, (value) ->
+      _.each @rules.deny, (value) =>
         _n = new RegExp(value + ' ', 'i')
-        Meteor.neo4j.search _n, query, (isFound) ->
+        @search _n, query, (isFound) ->
           if isFound
-            throw new Meteor.Error '401', '[Meteor.neo4j.check] "' + value + '" is not allowed! | ' + [ query ].toString()
+            throw new Meteor.Error '401', '[Meteor.neo4j.check] "#{value}" is not allowed!', query
 
   ###
   # @isomorphic
@@ -439,20 +429,16 @@ Meteor.neo4j =
     check callback, Match.Optional Match.OneOf Function, null
 
     @check query
-    uid = Package.sha.SHA256 query
-    cached = Meteor.neo4j.cacheCollection.find uid: uid
+    uid = Package.sha.SHA256 query + JSON.stringify opts
+    cached = @cacheCollection.find uid: uid
     if cached.fetch().length == 0 or @isWrite(query)
       if Meteor.isServer
         @run uid, query, opts, new Date
       else if @allowClientQuery == true and Meteor.isClient
         Meteor.call 'Neo4jRun', uid, query, opts, new Date, (error) ->
           if error
-            throw new Meteor.Error '500', 'Calling method [Neo4jRun]: ' + [
-              error
-              query
-              opts
-            ].toString()
-        Meteor.neo4j.uids.set _.union(Meteor.neo4j.uids.get(), [ uid ])
+            throw new Meteor.Error '500', 'Exception on calling method [Neo4jRun]', {error, query, opts}
+        @uids.set _.union(@uids.get(), [ uid ])
     @cache.get uid, callback
 
   ###
@@ -599,14 +585,7 @@ Meteor.neo4j =
       , 
         (error) ->
           if error
-            throw new Meteor.Error '500', 'Meteor.neo4j.cacheCollection.upsert: [Meteor.neo4j.cache.put]: ' + [
-              error
-              uid
-              data
-              queryString
-              opts
-              date
-            ].toString()
+            throw new Meteor.Error '500', 'Meteor.neo4j.cacheCollection.upsert: [Meteor.neo4j.cache.put]: ', {error, uid, data, queryString, opts, date}
     ) else undefined
 
   ###
@@ -618,13 +597,12 @@ Meteor.neo4j =
   ###
   init: if Meteor.isServer then ((url) ->
     check url, Match.Optional Match.OneOf String, null
-    if url and @connectionURL == null
-      @connectionURL = url
+    @connectionURL = url if url and @connectionURL == null
 
     ###
     # @description Connect to Neo4j database, returns GraphDatabase object
     ###
-    Meteor.N4JDB = new Meteor.Neo4j Meteor.neo4j.connectionURL
+    Meteor.N4JDB = new Meteor.Neo4j @connectionURL
 
     ###
     #
@@ -672,13 +650,7 @@ Meteor.neo4j =
     Meteor.N4JDB.query query, opts, (error, data) ->
       bound ->
         if error
-          throw new Meteor.Error '500', '[Meteor.neo4j.run]: ' + [
-            error
-            uid
-            query
-            opts
-            date
-          ].toString()
+          throw new Meteor.Error '500', '[Meteor.neo4j.run]: ', {error, uid, query, opts, date}
         else
           return Meteor.neo4j.cache.put uid, data or null, query, opts, date
   ) else undefined
@@ -695,20 +667,21 @@ Meteor.neo4j =
   #
   ###
   parseReturn: if Meteor.isServer then ((data, queryString) ->
-    check data, [Object]
+    check data, [Object]  
     check queryString, String
 
-    _data = data.map (result) ->
-      _.each result, (value, key, list) ->
-        if key.indexOf('.') != -1
-          list[key.replace('.', '_')] = value
-          delete list[key]
+    cleanData = (result) ->
+      for key, value of result when !!~key.indexOf('.')
+        result[key.replace('.', '_')] = value
+        delete result[key]
       result
+
+    _data = (cleanData(result) for result in data)
 
     _res = undefined
     _originals = []
     _n = new RegExp('return ', 'i')
-    wait = @search _n, queryString, (isFound) ->
+    @search _n, queryString, (isFound) ->
       if isFound
         _data = {}
         _res = queryString.replace(/.*return /i, '').trim()
@@ -716,50 +689,52 @@ Meteor.neo4j =
         i = _res.length - 1
 
         while i >= 0
-          if _res[i].indexOf('.') != -1
+          if !!~_res[i].indexOf('.')
             _res[i] = _res[i].replace '.', '_'
           i--
 
-        _res = _res.map (str) ->
+
+        _res = for str in _res
           str = str.trim()
-          if str.indexOf(' AS ') != -1
+          if !!~str.indexOf ' AS '
             str = _.last str.split ' '
           str
 
         _clauses = _.last(_res)
-        if _clauses.indexOf(' ') != -1
+        if !!~_clauses.indexOf(' ')
           _clause = _.first _clauses.split ' '
           _res[_res.length - 1] = _clause
 
         for i of _res
           _res[i] = _res[i].trim()
           _originals[i] = _res[i]
-          if _res[i].indexOf(' ') != -1
+          if !!~_res[i].indexOf(' ')
             _res[i] = _.last _res[i].split ' '
             _originals[i] = _.first _res[i].split ' '
           _data[_res[i]] = []
 
-        data.map (result) ->
+        for result in data
           for i of _res
-            if ! !result[_res[i]]
-              if _res[i].indexOf('(') != -1 and _res[i].indexOf(')') != -1
-                _data[_res[i]] = result[_res[i]]
-              else if _originals[i].indexOf('.') != -1 or _.isString(result[_res[i]]) or _.isNumber(result[_res[i]]) or _.isBoolean(result[_res[i]]) or _.isDate(result[_res[i]]) or _.isNaN(result[_res[i]]) or _.isNull(result[_res[i]]) or _.isUndefined(result[_res[i]])
-                _data[_res[i]].push result[_res[i]]
-              else
-                if !!result[_res[i]].data and ! !result[_res[i]]._data and ! !result[_res[i]]._data.metadata
-                  result[_res[i]].data.metadata = result[_res[i]]._data.metadata
+            if !!result[_res[i]]
+              switch
+                when !!~_res[i].indexOf('(') and !!~_res[i].indexOf(')')
+                  _data[_res[i]] = result[_res[i]]
+                when !!~_originals[i].indexOf('.') or _.isString(result[_res[i]]) or _.isNumber(result[_res[i]]) or _.isBoolean(result[_res[i]]) or _.isDate(result[_res[i]]) or _.isNaN(result[_res[i]]) or _.isNull(result[_res[i]]) or _.isUndefined(result[_res[i]])
+                  _data[_res[i]].push result[_res[i]]
+                else
+                  if !!result[_res[i]].data and !!result[_res[i]]._data and !!result[_res[i]]._data.metadata
+                    result[_res[i]].data.metadata = result[_res[i]]._data.metadata
 
-                if !!result[_res[i]]._data and ! !result[_res[i]]._data.start and ! !result[_res[i]]._data.end and ! !result[_res[i]]._data.type
-                  result[_res[i]].data.relation =
-                    extensions: result[_res[i]]._data.extensions
-                    start: _.last result[_res[i]]._data.start.split '/'
-                    end: _.last result[_res[i]]._data.end.split '/'
-                    self: _.last result[_res[i]]._data.self.split '/'
-                    type: result[_res[i]]._data.type
+                  if !!result[_res[i]]._data and !!result[_res[i]]._data.start and !!result[_res[i]]._data.end and !!result[_res[i]]._data.type
+                    result[_res[i]].data.relation =
+                      extensions: result[_res[i]]._data.extensions
+                      start: _.last result[_res[i]]._data.start.split '/'
+                      end: _.last result[_res[i]]._data.end.split '/'
+                      self: _.last result[_res[i]]._data.self.split '/'
+                      type: result[_res[i]]._data.type
 
-                if !!result[_res[i]].data
-                  _data[_res[i]].push result[_res[i]].data
+                  if !!result[_res[i]].data
+                    _data[_res[i]].push result[_res[i]].data
 
     @returns = _res
     _data
@@ -782,23 +757,18 @@ Meteor.neo4j =
     check opts, Match.Optional Match.OneOf Object, null
 
     result = []
-    if parsedData and not _.isEmpty parsedData
-      _.each parsedData, (set) ->
-        if set and _.isObject set
-          _.each set, (doc) ->
-            if _.has doc, '_id'
-              result.push doc._id
+
+    checkForId = (set) ->
+      result.push doc._id for key, doc of set when _.has doc, '_id'
+
+    checkForId(set) for key, set of parsedData when set and _.isObject set if parsedData and not _.isEmpty parsedData
 
     _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'|:[^\'\"\ ](\w*)/gi)
-    matches = undefined
-    while matches = _n.exec query
-      if matches[0]
-        result.push matches[0].replace(/["']/gi, '')
-    if opts
-      _.each opts, (value) ->
-        if _.isString value
-          result.push value
-    _.uniq result
+
+    result.push matches[0].replace(/["']/gi, '') while matches = _n.exec query when matches[0]
+    result.push value for key, value of opts when _.isString value if opts
+    result = _.uniq result
+    return (res for res in result when !!res.length)
   ) else undefined
 
 
@@ -827,10 +797,10 @@ Meteor.neo4j =
         _cmn = if methodName.indexOf('Neo4jReactiveMethod_') isnt -1 then methodName.replace 'Neo4jReactiveMethod_', '' else methodName
         _query = query.call opts
 
-        uid = Package.sha.SHA256 _query
+        uid = Package.sha.SHA256 _query + JSON.stringify opts
         if collectionName
           self.query _query, opts, (error, data) ->
-            throw new Meteor.Error '500', "[Meteor.neo4j.methods] | Error: " + error.toString() if error
+            throw new Meteor.Error '500', "[Meteor.neo4j.methods]", error if error
             throw new Meteor.Error '404', "[Meteor.neo4j.methods] | Collection: #{collectionName} not found! | Use Meteor.neo4j.collection(#{collectionName}) to create collection" if not self.collections[collectionName]
             self.mapLink collectionName, data, link, _cmn
 
@@ -863,15 +833,12 @@ Meteor.neo4j =
     check methodName, String
     check opts, Match.Optional Match.OneOf Object, null
 
-    for param in arguments
-      callback = param if _.isFunction param
+    callback = param for param in arguments when _.isFunction param
 
-    Meteor.call methodName, opts, name, link, (error, uid) ->
-      if error
-        throw new Meteor.Error '500', '[Meteor.neo4j.call] Method: ["' + methodName + '"] returns error! | ' + [ error ].toString()
-      else
-        Meteor.neo4j.uids.set _.union(Meteor.neo4j.uids.get(), [ uid ])
-        return Meteor.neo4j.cache.get(uid, callback)
+    Meteor.call methodName, opts, name, link, (error, uid) =>
+      throw new Meteor.Error '500', '[Meteor.neo4j.call] Method: ["#{methodName}"] returns error!', error if error
+      @uids.set _.union(@uids.get(), [ uid ])
+      return @cache.get(uid, callback)
   ) else undefined
 
 ###

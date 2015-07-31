@@ -1,6 +1,11 @@
 Changelog
 =========
 
+### [0.8.5](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/releases/tag/v0.8.5)
+
+* Better, more clean and much more efficient code
+* Fix issue with overhead caching
+
 ### [0.8.4](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/releases/tag/v0.8.4)
 
 * Fix issue [#48](https://github.com/VeliovGroup/ostrio-neo4jdriver/issues/48)
