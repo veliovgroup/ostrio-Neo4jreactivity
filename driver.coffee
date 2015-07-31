@@ -219,11 +219,8 @@ Meteor.neo4j =
 
     if link and data[link]
       if @subscriptions[subsName] and not _.isEmpty @subscriptions[subsName]
-        oldIds = _.map @subscriptions[subsName], (doc) ->
-          return doc._id
-
-        newIds = _.map data[link], (doc) ->
-          return doc._id
+        oldIds = (doc._id for doc in @subscriptions[subsName])
+        newIds = (doc._id for doc in data[link])
 
         diff = _.difference oldIds, newIds
         if diff and not _.isEmpty diff
@@ -245,7 +242,7 @@ Meteor.neo4j =
         else
           _id = doc._id
 
-        doc._id = _id
+        doc._id = _.clone _id
 
         @subscriptions[subsName].push _.clone doc
 
@@ -685,7 +682,7 @@ Meteor.neo4j =
     _res = undefined
     _originals = []
     _n = new RegExp('return ', 'i')
-    wait = @search _n, queryString, (isFound) ->
+    @search _n, queryString, (isFound) ->
       if isFound
         _data = {}
         _res = queryString.replace(/.*return /i, '').trim()
@@ -693,50 +690,52 @@ Meteor.neo4j =
         i = _res.length - 1
 
         while i >= 0
-          if _res[i].indexOf('.') != -1
+          if !!~_res[i].indexOf('.')
             _res[i] = _res[i].replace '.', '_'
           i--
 
-        _res = _res.map (str) ->
+
+        _res = for str in _res
           str = str.trim()
-          if str.indexOf(' AS ') != -1
+          if !!~str.indexOf ' AS '
             str = _.last str.split ' '
           str
 
         _clauses = _.last(_res)
-        if _clauses.indexOf(' ') != -1
+        if !!~_clauses.indexOf(' ')
           _clause = _.first _clauses.split ' '
           _res[_res.length - 1] = _clause
 
         for i of _res
           _res[i] = _res[i].trim()
           _originals[i] = _res[i]
-          if _res[i].indexOf(' ') != -1
+          if !!~_res[i].indexOf(' ')
             _res[i] = _.last _res[i].split ' '
             _originals[i] = _.first _res[i].split ' '
           _data[_res[i]] = []
 
-        data.map (result) ->
+        for result in data
           for i of _res
-            if ! !result[_res[i]]
-              if _res[i].indexOf('(') != -1 and _res[i].indexOf(')') != -1
-                _data[_res[i]] = result[_res[i]]
-              else if _originals[i].indexOf('.') != -1 or _.isString(result[_res[i]]) or _.isNumber(result[_res[i]]) or _.isBoolean(result[_res[i]]) or _.isDate(result[_res[i]]) or _.isNaN(result[_res[i]]) or _.isNull(result[_res[i]]) or _.isUndefined(result[_res[i]])
-                _data[_res[i]].push result[_res[i]]
-              else
-                if !!result[_res[i]].data and ! !result[_res[i]]._data and ! !result[_res[i]]._data.metadata
-                  result[_res[i]].data.metadata = result[_res[i]]._data.metadata
+            if !!result[_res[i]]
+              switch
+                when !!~_res[i].indexOf('(') and !!~_res[i].indexOf(')')
+                  _data[_res[i]] = result[_res[i]]
+                when !!~_originals[i].indexOf('.') or _.isString(result[_res[i]]) or _.isNumber(result[_res[i]]) or _.isBoolean(result[_res[i]]) or _.isDate(result[_res[i]]) or _.isNaN(result[_res[i]]) or _.isNull(result[_res[i]]) or _.isUndefined(result[_res[i]])
+                  _data[_res[i]].push result[_res[i]]
+                else
+                  if !!result[_res[i]].data and !!result[_res[i]]._data and !!result[_res[i]]._data.metadata
+                    result[_res[i]].data.metadata = result[_res[i]]._data.metadata
 
-                if !!result[_res[i]]._data and ! !result[_res[i]]._data.start and ! !result[_res[i]]._data.end and ! !result[_res[i]]._data.type
-                  result[_res[i]].data.relation =
-                    extensions: result[_res[i]]._data.extensions
-                    start: _.last result[_res[i]]._data.start.split '/'
-                    end: _.last result[_res[i]]._data.end.split '/'
-                    self: _.last result[_res[i]]._data.self.split '/'
-                    type: result[_res[i]]._data.type
+                  if !!result[_res[i]]._data and !!result[_res[i]]._data.start and !!result[_res[i]]._data.end and !!result[_res[i]]._data.type
+                    result[_res[i]].data.relation =
+                      extensions: result[_res[i]]._data.extensions
+                      start: _.last result[_res[i]]._data.start.split '/'
+                      end: _.last result[_res[i]]._data.end.split '/'
+                      self: _.last result[_res[i]]._data.self.split '/'
+                      type: result[_res[i]]._data.type
 
-                if !!result[_res[i]].data
-                  _data[_res[i]].push result[_res[i]].data
+                  if !!result[_res[i]].data
+                    _data[_res[i]].push result[_res[i]].data
 
     @returns = _res
     _data
@@ -835,15 +834,12 @@ Meteor.neo4j =
     check methodName, String
     check opts, Match.Optional Match.OneOf Object, null
 
-    for param in arguments
-      callback = param if _.isFunction param
+    callback = param for param in arguments when _.isFunction param
 
     Meteor.call methodName, opts, name, link, (error, uid) ->
-      if error
-        throw new Meteor.Error '500', '[Meteor.neo4j.call] Method: ["#{methodName}"] returns error!', error
-      else
-        Meteor.neo4j.uids.set _.union(Meteor.neo4j.uids.get(), [ uid ])
-        return Meteor.neo4j.cache.get(uid, callback)
+      throw new Meteor.Error '500', '[Meteor.neo4j.call] Method: ["#{methodName}"] returns error!', error if error
+      Meteor.neo4j.uids.set _.union(Meteor.neo4j.uids.get(), [ uid ])
+      return Meteor.neo4j.cache.get(uid, callback)
   ) else undefined
 
 ###
