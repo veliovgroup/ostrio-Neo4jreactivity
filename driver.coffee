@@ -59,18 +59,14 @@ Meteor.neo4j =
 
     cursor = collection.find {}
     getLabels = (doc) ->
-      if _.isObject doc
-        labels = if doc.__labels and doc.__labels.indexOf(':') is 0 then doc.__labels else ''
-      else if _.isArray doc
-        labelsArr = []
-        _.each doc, (record) ->
-          if _.has record, '__labels'
-            labelsArr.push record.__labels
-        labelsArr = _.uniq labelsArr
-        labels = labels.join ''
-      else
-        labels = ''
-      return labels
+      return switch
+        when _.isObject(doc) and !!doc.__labels and doc.__labels.indexOf(':') is 0 then doc.__labels
+        when _.isArray doc
+          labelsArr = (record.__labels for record in doc when _.has record, '__labels')
+          labelsArr = _.uniq labelsArr
+          labelsArr.join ''
+        else
+          ''
 
     if Meteor.isServer
       cursor.observe
@@ -436,7 +432,7 @@ Meteor.neo4j =
     check callback, Match.Optional Match.OneOf Function, null
 
     @check query
-    uid = Package.sha.SHA256 query
+    uid = Package.sha.SHA256 query + JSON.stringify opts
     cached = Meteor.neo4j.cacheCollection.find uid: uid
     if cached.fetch().length == 0 or @isWrite(query)
       if Meteor.isServer
@@ -763,23 +759,18 @@ Meteor.neo4j =
     check opts, Match.Optional Match.OneOf Object, null
 
     result = []
-    if parsedData and not _.isEmpty parsedData
-      _.each parsedData, (set) ->
-        if set and _.isObject set
-          _.each set, (doc) ->
-            if _.has doc, '_id'
-              result.push doc._id
+
+    checkForId = (set) ->
+      result.push doc._id for key, doc of set when _.has doc, '_id'
+
+    checkForId(set) for key, set of parsedData when set and _.isObject set if parsedData and not _.isEmpty parsedData
 
     _n = new RegExp(/"([a-zA-z0-9]*)"|'([a-zA-z0-9]*)'|:[^\'\"\ ](\w*)/gi)
 
-    while matches = _n.exec query
-      if matches[0]
-        result.push matches[0].replace(/["']/gi, '')
-    if opts
-      _.each opts, (value) ->
-        if _.isString value
-          result.push value
-    _.uniq result
+    result.push matches[0].replace(/["']/gi, '') while matches = _n.exec query when matches[0]
+    result.push value for key, value of opts when _.isString value if opts
+    result = _.uniq result
+    return (res for res in result when !!res.length)
   ) else undefined
 
 
@@ -808,7 +799,7 @@ Meteor.neo4j =
         _cmn = if methodName.indexOf('Neo4jReactiveMethod_') isnt -1 then methodName.replace 'Neo4jReactiveMethod_', '' else methodName
         _query = query.call opts
 
-        uid = Package.sha.SHA256 _query
+        uid = Package.sha.SHA256 _query + JSON.stringify opts
         if collectionName
           self.query _query, opts, (error, data) ->
             throw new Meteor.Error '500', "[Meteor.neo4j.methods]", error if error
