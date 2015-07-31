@@ -184,7 +184,7 @@ Meteor.neo4j =
     check link, String
 
     isReady = new ReactiveVar false
-    throw new Meteor.Error '404', "[Meteor.neo4j.subscribe] | Collection: #{collectionName} not found! | Use Meteor.neo4j.collection(#{collectionName}) to create collection" if not Meteor.neo4j.collections[collectionName]
+    throw new Meteor.Error '404', "[Meteor.neo4j.subscribe] | Collection: #{collectionName} not found! | Use Meteor.neo4j.collection(#{collectionName}) to create collection" if not @collections[collectionName]
 
     @subscriptions["#{collectionName}_#{name}"] = []
 
@@ -430,7 +430,7 @@ Meteor.neo4j =
 
     @check query
     uid = Package.sha.SHA256 query + JSON.stringify opts
-    cached = Meteor.neo4j.cacheCollection.find uid: uid
+    cached = @cacheCollection.find uid: uid
     if cached.fetch().length == 0 or @isWrite(query)
       if Meteor.isServer
         @run uid, query, opts, new Date
@@ -438,7 +438,7 @@ Meteor.neo4j =
         Meteor.call 'Neo4jRun', uid, query, opts, new Date, (error) ->
           if error
             throw new Meteor.Error '500', 'Exception on calling method [Neo4jRun]', {error, query, opts}
-        Meteor.neo4j.uids.set _.union(Meteor.neo4j.uids.get(), [ uid ])
+        @uids.set _.union(@uids.get(), [ uid ])
     @cache.get uid, callback
 
   ###
@@ -597,13 +597,12 @@ Meteor.neo4j =
   ###
   init: if Meteor.isServer then ((url) ->
     check url, Match.Optional Match.OneOf String, null
-    if url and @connectionURL == null
-      @connectionURL = url
+    @connectionURL = url if url and @connectionURL == null
 
     ###
     # @description Connect to Neo4j database, returns GraphDatabase object
     ###
-    Meteor.N4JDB = new Meteor.Neo4j Meteor.neo4j.connectionURL
+    Meteor.N4JDB = new Meteor.Neo4j @connectionURL
 
     ###
     #
@@ -836,10 +835,10 @@ Meteor.neo4j =
 
     callback = param for param in arguments when _.isFunction param
 
-    Meteor.call methodName, opts, name, link, (error, uid) ->
+    Meteor.call methodName, opts, name, link, (error, uid) =>
       throw new Meteor.Error '500', '[Meteor.neo4j.call] Method: ["#{methodName}"] returns error!', error if error
-      Meteor.neo4j.uids.set _.union(Meteor.neo4j.uids.get(), [ uid ])
-      return Meteor.neo4j.cache.get(uid, callback)
+      @uids.set _.union(@uids.get(), [ uid ])
+      return @cache.get(uid, callback)
   ) else undefined
 
 ###
