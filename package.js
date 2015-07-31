@@ -7,8 +7,8 @@ Package.describe({
 
 Package.onUse(function(api) {
   api.versionsFrom('1.0');
-  api.addFiles(['neo4jreactivity_driver.coffee', 'neo4jreactivity_collection.coffee'], ['client', 'server']);
-  api.addFiles('neo4jreactivity_methods.coffee', 'server');
+  api.addFiles(['driver.coffee', 'collection.coffee'], ['client', 'server']);
+  api.addFiles('methods.coffee', 'server');
   api.use(['mongo', 'check', 'underscore', 'sha', 'coffeescript', 'random', 'ostrio:minimongo-extensions@1.0.1'], ['client', 'server']);
   api.use(['tracker', 'reactive-var'], 'client');
   api.use('ostrio:neo4jdriver@0.2.15', 'server');
