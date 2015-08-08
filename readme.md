@@ -2,6 +2,8 @@
 
 ![Neo4j Reactivity Driver](https://raw.githubusercontent.com/VeliovGroup/ostrio-Neo4jreactivity/dev/logo-alt.png)
 
+__!Please always remove `autopublish` package before using this package!__
+
  - [About](#neo4j-db-reactive-layer-for-meteor)
  - [Example Application](#example-application)
  - [Installation](#install-the-driver)

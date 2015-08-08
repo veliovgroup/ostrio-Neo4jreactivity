@@ -1,6 +1,9 @@
 Changelog
 =========
 
+### [0.8.6](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/releases/tag/v0.8.6)
+* Fix issue when subscription is not updated on parameters change
+
 ### [0.8.5](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/releases/tag/v0.8.5)
 
 * Better, more clean and much more efficient code
