@@ -3,8 +3,7 @@
 @name neo4j
 @description Create application wide object `neo4j`
 ###
-if !Meteor.neo4j
-  Meteor.neo4j = {}
+Meteor.neo4j ?= {}
 
 ###
 @object
@@ -12,9 +11,7 @@ if !Meteor.neo4j
 @property uids {[String]} - Array of strings
 @description uids array od _id(s) from 'Neo4jCache' collection client needs to be subscribed
 ###
-if !Meteor.neo4j.uids
-  Meteor.neo4j.uids = new ReactiveVar [] if Meteor.isClient
-  Meteor.neo4j.uids = if Meteor.isServer then [] else Meteor.neo4j.uids.get()
+Meteor.neo4j.uids ?= if Meteor.isServer then [] else new ReactiveVar []
 
 ###
 @object
