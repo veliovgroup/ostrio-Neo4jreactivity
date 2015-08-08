@@ -18,6 +18,7 @@ if Meteor.isServer
 ###
 Meteor.neo4j =
 
+  ready: false
   resultsCache: {}
   collections: {}
   onSubscribes: {}
@@ -76,24 +77,18 @@ Meteor.neo4j =
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.query "MATCH (n#{labels} {_id: {_id}}) WITH count(n) AS count_n WHERE count_n <= 0 CREATE (n#{labels} {properties})", {properties: doc, _id: doc._id}
-          else
-            Meteor.neo4j.collections[collectionName].isMapping = false
         changed: (doc, old) ->
           labels = getLabels doc
           if not Meteor.neo4j.collections[collectionName].isMapping
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.query "MATCH (n#{labels} {_id: {_id}}) SET n = {properties}", {_id: old._id, properties: doc}
-          else
-            Meteor.neo4j.collections[collectionName].isMapping = false
         removed: (doc) ->
           labels = getLabels doc
           if not Meteor.neo4j.collections[collectionName].isMapping
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.query "MATCH (n#{labels} {_id: {_id}}) DELETE n", {_id: doc._id}
-          else
-            Meteor.neo4j.collections[collectionName].isMapping = false
     else
       cursor.observe
         added: (doc) ->
@@ -103,8 +98,6 @@ Meteor.neo4j =
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.call '___Neo4jObserveAdded', {properties: doc, _id: doc._id, __labels: labels}, (error) ->
               return throw new Meteor.Error '500', '[___Neo4jObserveRemoved]', error if error
-          else
-            Meteor.neo4j.collections[collectionName].isMapping = false
         changed: (doc, old) ->
           labels = getLabels doc
           if not Meteor.neo4j.collections[collectionName].isMapping
@@ -112,8 +105,6 @@ Meteor.neo4j =
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.call '___Neo4jObserveChanged', {_id: old._id, properties: doc, __labels: labels}, (error) ->
               return throw new Meteor.Error '500', '[___Neo4jObserveRemoved]', error if error
-          else
-            Meteor.neo4j.collections[collectionName].isMapping = false
         removed: (doc) ->
           labels = getLabels doc
           if not Meteor.neo4j.collections[collectionName].isMapping
@@ -121,8 +112,6 @@ Meteor.neo4j =
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.call '___Neo4jObserveRemoved', {_id: doc._id, __labels: labels}, (error) ->
               return throw new Meteor.Error '500', '[___Neo4jObserveRemoved]', error if error
-          else
-            Meteor.neo4j.collections[collectionName].isMapping = false
 
     if Meteor.isServer
       collection.publish = (name, func, onSubscribe) ->
@@ -429,9 +418,10 @@ Meteor.neo4j =
     check callback, Match.Optional Match.OneOf Function, null
 
     @check query
-    uid = Package.sha.SHA256 query + JSON.stringify opts
-    cached = @cacheCollection.find uid: uid
-    if cached.fetch().length == 0 or @isWrite(query)
+    uid = Package.sha.SHA256 query
+    cached = @cacheCollection.findOne uid: uid
+    optsDiffer = if cached then !_.isEqual(cached.opts, opts) else false
+    if not cached or @isWrite(query) or optsDiffer
       if Meteor.isServer
         @run uid, query, opts, new Date
       else if @allowClientQuery == true and Meteor.isClient
@@ -542,10 +532,11 @@ Meteor.neo4j =
               callback and callback null, result.data
       else
         if callback
-          if !Meteor.neo4j.cacheCollection.findOne(uid: uid)
-            Meteor.neo4j.cacheCollection.find(uid: uid).observe 
-              added: ->
-                callback null, Meteor.neo4j.cacheCollection.findOne(uid: uid).data
+          cursor = Meteor.neo4j.cacheCollection.find uid: uid
+          if cursor.fetch().length is 0
+            cursor.observe 
+              added: (doc) ->
+                callback null, doc.data
           else
             callback null, Meteor.neo4j.cacheCollection.findOne(uid: uid).data
 
@@ -626,6 +617,8 @@ Meteor.neo4j =
 
             affectedRecords.forEach (doc) ->
               Meteor.neo4j.run doc.uid, doc.query, doc.opts, doc.created
+
+    @ready = true
   ) else undefined
 
   ###
@@ -797,7 +790,7 @@ Meteor.neo4j =
         _cmn = if methodName.indexOf('Neo4jReactiveMethod_') isnt -1 then methodName.replace 'Neo4jReactiveMethod_', '' else methodName
         _query = query.call opts
 
-        uid = Package.sha.SHA256 _query + JSON.stringify opts
+        uid = Package.sha.SHA256 _query
         if collectionName
           self.query _query, opts, (error, data) ->
             throw new Meteor.Error '500', "[Meteor.neo4j.methods]", error if error
@@ -844,8 +837,7 @@ Meteor.neo4j =
 ###
 # @description Create Meteor.neo4j.uids ReactiveVar
 ###
-if Meteor.isClient
-  Meteor.neo4j.uids = new ReactiveVar []
+Meteor.neo4j.uids = new ReactiveVar [] if Meteor.isClient
 
 ###
 # @isomorphic
@@ -886,4 +878,5 @@ if Meteor.isServer
   ###
   # @description Initialize connection to Neo4j
   ###
-  Meteor.neo4j.init()
+  Meteor.startup ->
+    Meteor.neo4j.init() if not Meteor.neo4j.ready
