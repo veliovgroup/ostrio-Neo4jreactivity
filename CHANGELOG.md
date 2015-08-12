@@ -1,6 +1,14 @@
 Changelog
 =========
 
+### [0.9.0](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/releases/tag/v0.9.0)
+* Fix multiply issues with collection / publish / subscribe methodology
+* Add cache collection's indexes
+* Better and clean code
+* __Upgrade notes__:
+  - [For production stage] Run in MongoDB console: `db.Neo4jCache.remove({});`
+  - [For dev-stage] Run in console: `meteor reset` __This will drop all local-MongoDB records!!!__
+
 ### [0.8.6](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/releases/tag/v0.8.6)
 * Fix issue when subscription is not updated on parameters change
 

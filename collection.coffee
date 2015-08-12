@@ -22,6 +22,13 @@ Meteor.neo4j.uids ?= if Meteor.isServer then [] else new ReactiveVar []
 Meteor.neo4j.cacheCollection = new Meteor.Collection 'Neo4jCache'
 
 if Meteor.isServer
+  Meteor.neo4j.cacheCollection._ensureIndex
+    uid: 1
+    optuid: 1
+  ,
+    background: true
+    sparse: true
+    
   Meteor.neo4j.cacheCollection.allow
     insert: ->
       false
@@ -30,11 +37,11 @@ if Meteor.isServer
     remove: ->
       false
 
-  Meteor.publish 'Neo4jCacheCollection', (uids) ->
-    check uids, Match.Optional Match.OneOf [String], null
+  Meteor.publish 'Neo4jCacheCollection', (optuids) ->
+    check optuids, Match.Optional Match.OneOf [String], null
     Meteor.neo4j.cacheCollection.find 
-      uid: 
-        '$in': uids
+      optuid: 
+        '$in': optuids
 
 if Meteor.isClient
   Tracker.autorun ->
