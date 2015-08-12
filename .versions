@@ -16,7 +16,7 @@ mongo@1.1.0
 ordered-dict@1.0.3
 ostrio:minimongo-extensions@1.0.1
 ostrio:neo4jdriver@0.2.15
-ostrio:neo4jreactivity@0.8.6
+ostrio:neo4jreactivity@0.9.0
 random@1.0.3
 reactive-var@1.0.5
 retry@1.0.3
