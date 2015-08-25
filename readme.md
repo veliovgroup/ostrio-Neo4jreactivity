@@ -116,6 +116,14 @@ API
     * __Note__: All `selector`s and `doc` support `__labels` property, - use it to set Cypher label on insert or searching data, see [this example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/a6b467f43ccf20f39189e10b5d521fe12b4a55a2/leaderboard.js#L55)
     * [Collection() example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/master/leaderboard.js#L10)
 
+ * `Meteor.neo4j.call(name, [[opts], [link].. ], callback)` - Call server Neo4j method
+Call for method registered via `Meteor.neo4j.methods`.
+  - `name` {*String*} - Name of method function
+  - `opts` {*Object*} - A map of parameters for the Cypher query.
+  - `callback` {*Function*} - Returns `error` and `data` arguments.
+  - Returns {*Object*} - With `cursor` and reactive `get()` method
+  - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/eabeaa853f634af59295680c5c7cf8dd9ac5437c/leaderboard.js#L39)
+
 ## Server
  * `Meteor.neo4j.methods(object)` - Create server Cypher queries
   - `object` {*Object*} - Object of method functions, which returns Cypher query string
@@ -128,13 +136,6 @@ API
   - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/16c710c2ffac58691beb295a0c5f06c143cc9945/leaderboard.js#L76)
 
 ## Client
- * `Meteor.neo4j.call(name, [[opts], [link].. ], callback)` - Call server Neo4j method
-Call for method registered via `Meteor.neo4j.methods`.
-  - `name` {*String*} - Name of method function
-  - `opts` {*Object*} - A map of parameters for the Cypher query.
-  - `callback` {*Function*} - Returns `error` and `data` arguments.
-  - Returns {*Object*} - With `cursor` and reactive `get()` method
-  - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/eabeaa853f634af59295680c5c7cf8dd9ac5437c/leaderboard.js#L39)
  * `Meteor.neo4j.subscribe(collectionName, name, [opts], [link])`
   - `collectionName` {*String*} - Collection name of method function
   - `name` {*String*} - Name of subscribe function. Please use same name in publish/subscription

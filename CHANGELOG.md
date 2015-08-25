@@ -1,6 +1,10 @@
 Changelog
 =========
 
+### [0.9.1](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/releases/tag/v0.9.1)
+* Fix multiply issues with reactive data
+* Fix issue #54
+
 ### [0.9.0](https://github.com/VeliovGroup/ostrio-Neo4jreactivity/releases/tag/v0.9.0)
 * Fix multiply issues with collection / publish / subscribe methodology
 * Add cache collection's indexes
