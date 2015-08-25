@@ -214,7 +214,7 @@ Meteor.neo4j =
     check link, String
     check subsName, String
 
-    if link and data[link]
+    if link and data?[link]
       if @subscriptions[subsName] and not _.isEmpty @subscriptions[subsName]
         oldIds = (doc._id for doc in @subscriptions[subsName])
         newIds = (doc._id for doc in data[link])
@@ -488,8 +488,17 @@ Meteor.neo4j =
     # @returns object
     #
     ###
-    getObject: (optuid) ->
+    getObject: (optuid, callback) ->
       check optuid, String
+      check callback, Match.Optional Match.OneOf Function, null
+
+      if callback and _.isFunction callback
+        cbWrapper = (error, data) ->
+          _uids = Meteor.neo4j.uids.get()
+          if !!~_uids.indexOf optuid
+            callback error, data
+      else
+        cbWrapper = -> null
 
       if Meteor.neo4j.allowClientQuery == true and Meteor.isClient or Meteor.isServer
         cache = Meteor.neo4j.cacheCollection.find {optuid}
@@ -499,36 +508,41 @@ Meteor.neo4j =
 
           cache.observe
             added: (doc) ->
+              cbWrapper null, doc.data
               Meteor.neo4j.resultsCache['NEO4JRES_' + optuid] = doc.data
             changed: (doc) ->
+              cbWrapper null, doc.data
               Meteor.neo4j.resultsCache['NEO4JRES_' + optuid] = doc.data
             removed: ->
+              cbWrapper()
               Meteor.neo4j.resultsCache['NEO4JRES_' + optuid] = null
-          return {
+          res =
             cursor: cache
             get: ->
               Meteor.neo4j.resultsCache['NEO4JRES_' + optuid]
-          }
         else
           result = new ReactiveVar null
-          _findOne = Meteor.neo4j.cacheCollection.findOne {optuid}
+          _findOne = cache.fetch()[0]?.data
 
           if _findOne
             result.set _findOne.data
 
           cache.observe
             added: (doc) ->
+              cbWrapper null, doc.data
               result.set doc.data
             changed: (doc) ->
+              cbWrapper null, doc.data
               result.set doc.data
             removed: ->
+              cbWrapper()
               result.set null
-          return {
+          res =
             cursor: cache
             get: ->
               result.get()
-          }
 
+        return res
     ###
     # @isomorphic
     # @function
@@ -544,18 +558,7 @@ Meteor.neo4j =
       check optuid, String
       check callback, Match.Optional Match.OneOf Function, null
 
-      if callback and _.isFunction callback
-        cursor = Meteor.neo4j.cacheCollection.find {optuid}
-        if (Meteor.neo4j.allowClientQuery is true and Meteor.isClient) or Meteor.isServer
-          fetched = cursor.fetch()
-          if fetched.length is 0
-            cursor.observe 
-              added: (doc) ->
-               callback null, doc.data
-          else
-            callback null, fetched[0].data
-
-      Meteor.neo4j.cache.getObject optuid
+      Meteor.neo4j.cache.getObject optuid, callback
 
     ###
     # @isomorphic
@@ -820,7 +823,6 @@ Meteor.neo4j =
               throw new Meteor.Error 500, "[Meteor.neo4j.methods]"
             throw new Meteor.Error 404, "[Meteor.neo4j.methods] | Collection: #{collectionName} not found! | Use Meteor.neo4j.collection(#{collectionName}) to create collection" if not self.collections[collectionName]
             self.mapLink collectionName, data, link, _cmn
-
           self.onSubscribes[_cmn].call(opts) if self.onSubscribes[_cmn] and _.isFunction self.onSubscribes[_cmn]
         else
           self.query _query, opts
