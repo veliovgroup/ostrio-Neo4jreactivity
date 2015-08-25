@@ -11,7 +11,7 @@ Meteor.neo4j ?= {}
 @property uids {[String]} - Array of strings
 @description uids array od _id(s) from 'Neo4jCache' collection client needs to be subscribed
 ###
-Meteor.neo4j.uids ?= if Meteor.isServer then [] else new ReactiveVar []
+Meteor.neo4j.uids ?= new ReactiveVar []
 
 ###
 @object

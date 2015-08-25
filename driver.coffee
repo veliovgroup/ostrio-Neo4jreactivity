@@ -96,21 +96,21 @@ Meteor.neo4j =
           if not Meteor.neo4j.collections[collectionName].isMapping
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
-            Meteor.neo4j.call '___Neo4jObserveAdded', {properties: doc, _id: doc._id, __labels: labels}, (error) ->
+            Meteor.neo4j.call '___Neo4jObserveAdded', {properties: doc, _id: doc._id, __labels: labels}, collectionName, doc, (error) ->
               return throw new Meteor.Error '500', '[___Neo4jObserveRemoved]', error if error
         changed: (doc, old) ->
           labels = getLabels doc
           if not Meteor.neo4j.collections[collectionName].isMapping
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
-            Meteor.neo4j.call '___Neo4jObserveChanged', {_id: old._id, properties: doc, __labels: labels}, (error) ->
+            Meteor.neo4j.call '___Neo4jObserveChanged', {_id: old._id, properties: doc, __labels: labels}, collectionName, doc, (error) ->
               return throw new Meteor.Error '500', '[___Neo4jObserveRemoved]', error if error
         removed: (doc) ->
           labels = getLabels doc
           if not Meteor.neo4j.collections[collectionName].isMapping
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
-            Meteor.neo4j.call '___Neo4jObserveRemoved', {_id: doc._id, __labels: labels}, (error) ->
+            Meteor.neo4j.call '___Neo4jObserveRemoved', {_id: doc._id, __labels: labels}, collectionName, doc, (error) ->
               return throw new Meteor.Error '500', '[___Neo4jObserveRemoved]', error if error
 
     if Meteor.isServer
@@ -533,21 +533,16 @@ Meteor.neo4j =
       check optuid, String
       check callback, Match.Optional Match.OneOf Function, null
 
-      if Meteor.neo4j.allowClientQuery is true and Meteor.isClient
-        if callback
-          Tracker.autorun ->
-            result = Meteor.neo4j.cacheCollection.findOne {optuid}
-            if result and result.data
-              callback and callback null, result.data
-      else
-        if callback
-          cursor = Meteor.neo4j.cacheCollection.find {optuid}
-          if cursor.fetch().length is 0
+      if callback and _.isFunction callback
+        cursor = Meteor.neo4j.cacheCollection.find {optuid}
+        if (Meteor.neo4j.allowClientQuery is true and Meteor.isClient) or Meteor.isServer
+          fetched = cursor.fetch()
+          if fetched.length is 0
             cursor.observe 
               added: (doc) ->
-                callback and callback null, doc.data
+               callback null, doc.data
           else
-            callback and callback null, Meteor.neo4j.cacheCollection.findOne({optuid}).data
+            callback null, fetched[0].data
 
       Meteor.neo4j.cache.getObject optuid
 
@@ -619,11 +614,10 @@ Meteor.neo4j =
       bound ->
         if Meteor.neo4j.isWrite query
           sensitivities = Meteor.neo4j.parseSensitivities query, opts
-
           if sensitivities
             affectedRecords = Meteor.neo4j.cacheCollection.find
               sensitivities: 
-                '$in': sensitivities
+                $in: sensitivities
               type: 'READ'
 
             affectedRecords.forEach (doc) ->
@@ -656,7 +650,7 @@ Meteor.neo4j =
     Meteor.N4JDB.query query, opts, (error, data) ->
       bound ->
         if error
-          throw new Meteor.Error '500', '[Meteor.neo4j.run]: ', {error, uid, optuid, query, opts, date}
+          throw new Meteor.Error '[Meteor.N4JDB.query]: ', JSON.stringify {error, uid, optuid, query, opts, date}
         else
           return Meteor.neo4j.cache.put uid, optuid, data or null, query, opts, date
   ) else undefined
@@ -811,17 +805,61 @@ Meteor.neo4j =
             throw new Meteor.Error '404', "[Meteor.neo4j.methods] | Collection: #{collectionName} not found! | Use Meteor.neo4j.collection(#{collectionName}) to create collection" if not self.collections[collectionName]
             self.mapLink collectionName, data, link, _cmn
 
-          self.onSubscribes[_cmn].call() if self.onSubscribes[_cmn] and _.isFunction self.onSubscribes[_cmn]
+          self.onSubscribes[_cmn].call(opts) if self.onSubscribes[_cmn] and _.isFunction self.onSubscribes[_cmn]
         else
           self.query _query, opts
 
-        return {optuid, uid}
+        return {optuid, uid, isWrite: self.isWrite(_query), isRead: self.isRead(_query)}
 
     Meteor.methods _methods
   ) else undefined
 
   ###
-  # @clinet
+  # @server
+  # @function
+  # @namespace neo4j
+  # @name methods
+  # @param methods {Object} - Special service methods for reactive mini-neo4j
+  #
+  ###
+  ___methods: if Meteor.isServer then ((methods) ->
+    check methods, Object
+
+    self = @
+    _methods = {}
+    _.each methods, (query, methodName) ->
+      _methods[methodName] = (opts, collectionName, doc) ->
+        check opts, Match.Optional Match.OneOf Object, null
+        check collectionName, String
+        check doc, Object
+
+        if methodName is '___Neo4jObserveAdded'
+          self.collections[collectionName].isMapping
+          self.collections[collectionName].collection.insert doc, () ->
+            self.collections[collectionName].isMapping = false
+
+        if methodName is '___Neo4jObserveChanged'
+          delete doc._id
+          self.collections[collectionName].isMapping = true
+          self.collections[collectionName].collection.update opts._id, $set: doc, () ->
+            self.collections[collectionName].isMapping = false
+
+        if methodName is '___Neo4jObserveRemoved'
+          self.collections[collectionName].isMapping = true
+          self.collections[collectionName].collection.remove opts._id, () ->
+            self.collections[collectionName].isMapping = false
+
+        _query = query.call opts
+        uid = Package.sha.SHA256 _query
+        optuid = Package.sha.SHA256 _query + JSON.stringify opts
+        self.query _query, opts
+        return {optuid, uid, isWrite: self.isWrite(_query), isRead: self.isRead(_query)}
+
+    Meteor.methods _methods
+  ) else undefined
+
+  ###
+  # @isomorphic
   # @function
   # @namespace neo4j
   # @name call
@@ -836,30 +874,31 @@ Meteor.neo4j =
   # @returns {Object} | With get() method [REACTIVE DATA SOURCE]
   #
   ###
-  call: if Meteor.isClient then ((methodName, opts, name, link) ->
+  call: (methodName, opts, name, link) ->
     check methodName, String
     check opts, Match.Optional Match.OneOf Object, null
 
     callback = param for param in arguments when _.isFunction param
 
     Meteor.call methodName, opts, name, link, (error, uids) =>
-      throw new Meteor.Error '500', '[Meteor.neo4j.call] Method: ["#{methodName}"] returns error!', error if error
-      
+      throw new Meteor.Error '500', "[Meteor.neo4j.call] Method: [\"#{methodName}\"] returns error!", error if error
+
       cached = @cacheCollection.find uid: uids.uid
-      if Meteor.isClient and cached.fetch().length > 0
-        _uids = @uids.get()
-        _.each cached.fetch(), (row) ->
-          _uids = _.without _uids, row.optuid unless row.optuid is uids.optuid
-        @uids.set _uids
-      @uids.set _.union(@uids.get(), [ uids.optuid ])
+      _uids = @uids.get()
+      _.each cached.fetch(), (row) ->
+        _uids = _.without _uids, row.optuid unless row.optuid is uids.optuid
+      
+      unless uids.isWrite
+        _uids = _.union _uids, [ uids.optuid ]
+
+      @uids.set _uids
 
       return @cache.get(uids.optuid, callback)
-  ) else undefined
 
 ###
 # @description Create Meteor.neo4j.uids ReactiveVar
 ###
-Meteor.neo4j.uids = new ReactiveVar [] if Meteor.isClient
+Meteor.neo4j.uids = new ReactiveVar []
 
 ###
 # @isomorphic
@@ -887,7 +926,7 @@ if Meteor.isServer
   ###
   # @description Methods for reactive mini-neo4j
   ###
-  Meteor.neo4j.methods
+  Meteor.neo4j.___methods
     '___Neo4jObserveAdded': () ->
       return "MATCH (n#{@__labels} {_id: {_id}}) WITH count(n) AS count_n WHERE count_n <= 0 CREATE (n#{@__labels} {properties})"
 
