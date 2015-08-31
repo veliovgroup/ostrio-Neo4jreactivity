@@ -3,8 +3,7 @@ if Meteor.isServer
   # @server
   # @var {object} bound - Meteor.bindEnvironment aka Fiber wrapper
   ###
-  bound = Meteor.bindEnvironment (callback) ->
-    return callback()
+  bound = Meteor.bindEnvironment (callback) -> return callback()
 
   Meteor.N4JDB = {}
 
@@ -583,6 +582,7 @@ Meteor.neo4j =
       check date, Date
 
       parsedData = Meteor.neo4j.parseReturn data, queryString
+      sensitivities = Meteor.neo4j.parseSensitivities queryString, opts, parsedData
       Meteor.neo4j.cacheCollection.upsert
         optuid: optuid
       ,
@@ -593,12 +593,73 @@ Meteor.neo4j =
         opts:     opts
         type:     if Meteor.neo4j.isWrite queryString then 'WRITE' else 'READ'
         created:  date
-        sensitivities: Meteor.neo4j.parseSensitivities queryString, opts, parsedData
+        sensitivities: sensitivities
       , 
         (error) ->
           if error
             console.error {error, uid, optuid, data, queryString, opts, date}
             throw new Meteor.Error 500, 'Meteor.neo4j.cacheCollection.upsert: [Meteor.neo4j.cache.put]'
+          else
+            ###
+            #
+            # @callback
+            # @description Listen for all requests to Neo4j
+            # if request is writing/changing/removing data
+            # we will find all sensitive data and update 
+            # only subscribed records at Meteor.neo4j.cacheCollection
+            #
+            ###
+            if Meteor.neo4j.isWrite queryString
+              if sensitivities
+                affectedRecords = Meteor.neo4j.cacheCollection.find
+                  optuid:
+                    $in: Meteor.neo4j.uids.get()
+                  sensitivities: 
+                    $in: sensitivities
+                  type: 'READ'
+                ,
+                  fields: 
+                    optuid: 1
+
+                optuids = (row.optuid for row in affectedRecords.fetch())
+                Meteor.neo4j.cache.refresh optuids
+    ) else undefined
+
+    ###
+    # @isomorphic
+    # @function
+    # @namespace neo4j.cache
+    # @name refresh
+    # @param optuids {[String]} - Array of strings
+    # @description Used for long-polling
+    #
+    ###
+    refresh: if Meteor.isServer then ((optuids) ->
+      check optuids, [String]
+
+      cursor = Meteor.neo4j.cacheCollection.find 
+        optuid: 
+          $in: optuids
+
+      cursor.forEach (row) ->
+        bound ->
+          Meteor.N4JDB.query row.query, row.opts, (error, data) ->
+            bound ->
+              if error
+                console.error {error, data} 
+              else
+                parsedData = Meteor.neo4j.parseReturn data, row.query
+                unless EJSON.equals parsedData, row.data
+                  Meteor.neo4j.cacheCollection.update 
+                    optuid: row.optuid
+                  ,
+                    $set: 
+                      data: parsedData
+                  ,
+                    (error) ->
+                      if error
+                        console.error {error, uid, optuid, data, queryString, opts, date}
+                        throw new Meteor.Error 500, 'Meteor.neo4j.cacheCollection.upsert: [Meteor.neo4j.cache.refresh]'
     ) else undefined
 
   ###
@@ -606,7 +667,7 @@ Meteor.neo4j =
   # @function
   # @namespace neo4j
   # @name init
-  # @description connect to neo4j DB and set listeners
+  # @description connect to neo4j DB
   ###
   init: if Meteor.isServer then ((url) ->
     check url, Match.Optional Match.OneOf String, null
@@ -616,28 +677,6 @@ Meteor.neo4j =
     # @description Connect to Neo4j database, returns GraphDatabase object
     ###
     Meteor.N4JDB = new Meteor.Neo4j @connectionURL
-
-    ###
-    #
-    # @callback
-    # @description Listen for all requests to Neo4j
-    # if request is writing/changing/removing data
-    # we will find all sensitive data and update 
-    # all subscribed records at Meteor.neo4j.cacheCollection
-    #
-    ###
-    Meteor.N4JDB.listen (query, opts) ->
-      bound ->
-        if Meteor.neo4j.isWrite query
-          sensitivities = Meteor.neo4j.parseSensitivities query, opts
-          if sensitivities
-            affectedRecords = Meteor.neo4j.cacheCollection.find
-              sensitivities: 
-                $in: sensitivities
-              type: 'READ'
-
-            affectedRecords.forEach (doc) ->
-              Meteor.neo4j.run doc.uid, doc.optuid, doc.query, doc.opts, doc.created
 
     @ready = true
   ) else undefined
@@ -655,7 +694,7 @@ Meteor.neo4j =
   # @description Run Cypher query, handle response with Fibers
   #
   ###
-  run: if Meteor.isServer then ((uid, optuid, query, opts, date) ->
+  run: if Meteor.isServer then ((uid, optuid, query, opts, date, callback) ->
     check uid, String
     check optuid, String
     check query, String
@@ -666,9 +705,10 @@ Meteor.neo4j =
     Meteor.N4JDB.query query, opts, (error, data) ->
       bound ->
         if error
-          console.error {error, uid, optuid, query, opts, date}
-          throw new Meteor.Error 500, '[Meteor.N4JDB.query]'
+          console.error {error, uid, optuid, query, opts, date, data}
+          console.error new Meteor.Error 500, '[Meteor.N4JDB.query]', error
         else
+          callback and callback.call {error, uid, optuid, query, opts, date}, error, data
           return Meteor.neo4j.cache.put uid, optuid, data or null, query, opts, date
   ) else undefined
 
@@ -961,3 +1001,11 @@ if Meteor.isServer
   ###
   Meteor.startup ->
     Meteor.neo4j.init() if not Meteor.neo4j.ready
+
+  ###
+  # @description Long polling for all active subscriptions
+  ###
+  Meteor.setInterval ->
+    Meteor.neo4j.cache.refresh Meteor.neo4j.uids.get() if Meteor.neo4j?.uids?.get()
+  ,
+    25000

@@ -10,6 +10,7 @@ __!Please always remove `autopublish` package before using this package!__
  - [Notes](#several-notes)
    * [TTL](#ttl)
    * [Two ways to query Neo4j](#the-way-to-work-with-queries)
+   * [Long-polling](#long-polling)
  - [API](#api)
    * [Isomorphic](#isomorphic)
    * [Server](#server)
@@ -29,7 +30,9 @@ Neo4j DB reactive layer for Meteor
 
 Example Application
 =======
-The basic example is build on top of `--example leaderboard` - the [Meteor's Neo4j-based Leaderboard App](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j) 
+##### Demo app is available at [leaderboard-neo4j-reactivity.meteor.com](http://leaderboard-neo4j-reactivity.meteor.com/)
+
+Or you may check out it sources - the basic example is build on top of `--example leaderboard` - the [Meteor's Neo4j-based Leaderboard App](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j) 
 
 
 Install the driver
@@ -58,6 +61,9 @@ It is __okay__ to combine them both. Most advanced way is to use `methods`/`call
 
 But at the same moment `collection`/`publish`/`subscription` approach has latency compensation and let to work with data and requests as with minimongo instance, but limited to simple `insert`/`update`/`remove` operations on data sets, so you can't set relations, indexes, predicates and other Cypher query options (__Labels and Properties__ is well supported. For Labels use `__labels` property as `{__labels: ":First:Second:Third"}`).
 
+##### Long-polling
+This package has built-in mechanism of  database long-polling, all active subscriptions will be updated every 25 seconds if changes was made out of this driver structure, i.e.: directly into Neo4j or somehow else via other drivera, connectors and apps. This feature will be removed as soon as `listener` or some kind of `observer` will be implemented inside Neo4j driver.
+
 
 API
 =======
@@ -69,7 +75,6 @@ API
   - Set connection URL, uncluding login and password to Neo4j DataBase
   - [Example](https://github.com/VeliovGroup/Meteor-Leaderboard-Neo4j/blob/a6b467f43ccf20f39189e10b5d521fe12b4a55a2/lib/neo4j.js#L4)
  * `Meteor.neo4j.rules.write` - Array of strings with Cypher write operators
- * `Meteor.neo4j.rules.read` - Array of strings with Cypher read operators
  * `Meteor.neo4j.set.allow([rules])` - Set allowed Cypher operators for client side
   - `rules` {*[String]*} - Array of Cyphper query operators Strings
  * `Meteor.neo4j.set.deny([rules])` - Set denied Cypher operators for client side

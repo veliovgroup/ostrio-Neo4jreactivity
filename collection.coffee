@@ -37,12 +37,23 @@ if Meteor.isServer
     remove: ->
       false
 
+  optuidsR = {}
   Meteor.publish 'Neo4jCacheCollection', (optuids) ->
     check optuids, Match.Optional Match.OneOf [String], null
+
+    optuidsR[@_session.id] = optuids
+    allOptuids = []
+    allOptuids = _.union allOptuids, value for key, value of optuidsR
+    Meteor.neo4j.uids.set allOptuids
+    @connection.onClose => 
+      delete optuidsR[@_session.id] if _.has optuidsR, @_session.id
+      allOptuids = []
+      allOptuids = _.union allOptuids, value for key, value of optuidsR
+      Meteor.neo4j.uids.set allOptuids
+
     Meteor.neo4j.cacheCollection.find 
       optuid: 
         '$in': optuids
 
 if Meteor.isClient
-  Tracker.autorun ->
-    Meteor.subscribe 'Neo4jCacheCollection', Meteor.neo4j.uids.get()
+  Tracker.autorun -> Meteor.subscribe 'Neo4jCacheCollection', Meteor.neo4j.uids.get()
