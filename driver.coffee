@@ -46,6 +46,7 @@ Meteor.neo4j =
     check collectionName, String
 
     collection = new Mongo.Collection null
+    console.log "create collection :", collectionName
     @collections[collectionName] = {}
     @collections[collectionName].isMapping = false
     @collections[collectionName].collection = collection
@@ -61,56 +62,107 @@ Meteor.neo4j =
     getLabels = (doc) ->
       return switch
         when _.isObject(doc) and !!doc.__labels and doc.__labels.indexOf(':') is 0 then doc.__labels
+        when _.isObject(doc) and !!doc?.metadata?.labels and doc.metadata.labels.length > 0
+          console.warn "[getLabels] [HAS METADATA LABEL]"
+          labels = ''
+          labels += ":#{label}" for label in doc.metadata.labels
+          return labels
         when _.isArray doc
-          labelsArr = (record.__labels for record in doc when _.has record, '__labels')
+          labelsArr = []
+          for record in doc
+            if _.has record, '__labels'
+              labelsArr.push record.__labels
+            if doc?.metadata?.labels
+              console.warn "[getLabels] [HAS METADATA LABEL] [!!!AS ARRAY!!!]"
+              labels = ''
+              for label in doc.metadata.labels
+                labelsArr.push ":#{label}"
+
           labelsArr = _.uniq labelsArr
-          labelsArr.join ''
+          return labelsArr.join ''
         else
           ''
 
     if Meteor.isServer
       cursor.observe
         added: (doc) ->
-          labels = getLabels doc
+          console.warn "cursor.observe added"
           if not Meteor.neo4j.collections[collectionName].isMapping
+            doc = _.clone doc
+            labels = getLabels doc
+            console.log "labels = getLabels doc", labels, doc
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.query "MATCH (n#{labels} {_id: {_id}}) WITH count(n) AS count_n WHERE count_n <= 0 CREATE (n#{labels} {properties})", {properties: doc, _id: doc._id}
         changed: (doc, old) ->
-          labels = getLabels doc
+          console.log "changed", doc, old, Meteor.neo4j.collections[collectionName].isMapping
           if not Meteor.neo4j.collections[collectionName].isMapping
+            doc = _.clone doc
+            labels = getLabels doc
+            query = "MATCH (n#{labels} {_id: {_id}}) SET "
+            increments = {}
+            for key, value of doc
+              if _.isNumber doc[key]
+                if value isnt old[key]
+                  increments[key] = value - old[key]
+                  delete doc[key]
+
+            console.warn increments
+
+            for key, value of increments
+              if value > 0
+                query += "n.#{key} = n.#{key} + #{value}, "
+              else if value < 0
+                query += "n.#{key} = n.#{key} - #{Math.abs(value)}, "
+
+            for key, value of doc
+              if _.isString(value) or _.isNumber value
+                query += "n.#{key} = #{value}, "
+                delete doc[key]
+              else
+                query += "n.#{key} = #{key}, "
+
+            query = query.substring 0, 3
+
+            console.warn query
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
-            Meteor.neo4j.query "MATCH (n#{labels} {_id: {_id}}) SET n = {properties}", {_id: old._id, properties: doc}
+            Meteor.neo4j.query query, _.extend {_id: old._id}, doc
         removed: (doc) ->
-          labels = getLabels doc
           if not Meteor.neo4j.collections[collectionName].isMapping
+            doc = _.clone doc
+            labels = getLabels doc
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.query "MATCH (n#{labels} {_id: {_id}}) DELETE n", {_id: doc._id}
     else
       cursor.observe
         added: (doc) ->
-          labels = getLabels doc
+          console.warn "added"
           if not Meteor.neo4j.collections[collectionName].isMapping
+            doc = _.clone doc
+            labels = getLabels doc
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.call '___Neo4jObserveAdded', {properties: doc, _id: doc._id, __labels: labels}, collectionName, doc, (error) ->
+              console.warn "added via ___Neo4jObserveAdded"
               if error
                 console.error {error, collectionName}
-                throw new Meteor.Error 500, '[___Neo4jObserveRemoved]'
+                throw new Meteor.Error 500, '[___Neo4jObserveAdded]'
         changed: (doc, old) ->
-          labels = getLabels doc
           if not Meteor.neo4j.collections[collectionName].isMapping
+            doc = _.clone doc
+            labels = getLabels doc
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
-            Meteor.neo4j.call '___Neo4jObserveChanged', {_id: old._id, properties: doc, __labels: labels}, collectionName, doc, (error) ->
+            Meteor.neo4j.call '___Neo4jObserveChanged', {_id: old._id, properties: doc, __labels: labels, old}, collectionName, doc, (error) ->
               if error
                 console.error {error, collectionName}
-                throw new Meteor.Error 500, '[___Neo4jObserveRemoved]'
+                throw new Meteor.Error 500, '[___Neo4jObserveChanged]'
         removed: (doc) ->
-          labels = getLabels doc
           if not Meteor.neo4j.collections[collectionName].isMapping
+            doc = _.clone doc
+            labels = getLabels doc
             delete doc.__labels if _.has doc, '__labels'
             delete doc.metadata if _.has doc, 'metadata'
             Meteor.neo4j.call '___Neo4jObserveRemoved', {_id: doc._id, __labels: labels}, collectionName, doc, (error) ->
@@ -121,7 +173,6 @@ Meteor.neo4j =
     if Meteor.isServer
       collection.publish = (name, func, onSubscribe) ->
         Meteor.neo4j.publish collectionName, name, func, onSubscribe
-
     else
       collection.subscribe = (name, opts, link = false) ->
         Meteor.neo4j.subscribe collectionName, name, opts, link
@@ -678,6 +729,9 @@ Meteor.neo4j =
     ###
     Meteor.N4JDB = new Meteor.Neo4j @connectionURL
 
+    Meteor.N4JDB.listen ->
+      Meteor._debug arguments[0]
+
     @ready = true
   ) else undefined
 
@@ -988,10 +1042,57 @@ if Meteor.isServer
   ###
   Meteor.neo4j.___methods
     '___Neo4jObserveAdded': () ->
-      return "MATCH (n#{@__labels} {_id: {_id}}) WITH count(n) AS count_n WHERE count_n <= 0 CREATE (n#{@__labels} {properties})"
+      console.warn "___Neo4jObserveAdded", @__labels, @
+      query = "MATCH (n#{@__labels} {_id: {_id}}) WITH count(n) AS count_n WHERE count_n <= 0 CREATE (n#{@__labels} {properties})"
+      console.warn "[___Neo4jObserveAdded] [query]", query
+      return query
 
     '___Neo4jObserveChanged': () ->
-      return "MATCH (n#{@__labels} {_id: {_id}}) SET n = {properties}"
+      console.warn "___Neo4jObserveChanged"
+      # query = "MATCH (n#{@__labels} {_id: {_id}}) SET n = {properties}"
+      # increments = {}
+      # for key, value of @properties
+      #   if _.isNumber @properties[key]
+      #     if value isnt @old[key]
+      #       increments[key] = value - @old[key]
+      #       delete @properties[key]
+
+      # console.warn increments
+
+      # for key, value of increments
+      #   if value > 0
+      #     query += ", n.#{key} = n.#{key} + #{value}"
+      #   else if value < 0
+      #     query += ", n.#{key} = n.#{key} - #{Math.abs(value)}"
+
+
+      query = "MATCH (n#{@__labels} {_id: {_id}}) SET "
+      increments = {}
+      for key, value of @properties
+        if _.isNumber @properties[key]
+          if value isnt @old[key]
+            increments[key] = value - @properties[key]
+            delete @properties[key]
+
+      console.warn increments
+
+      for key, value of increments
+        if value > 0
+          query += "n.#{key} = n.#{key} + #{value}, "
+        else if value < 0
+          query += "n.#{key} = n.#{key} - #{Math.abs(value)}, "
+
+      for key, value of @properties
+        if _.isString(value) or _.isNumber value
+          query += "n.#{key} = #{value}, "
+          delete @properties[key]
+        else
+          query += "n.#{key} = #{key}, "
+
+      query = query.substring 0, 3
+
+      console.warn query
+      return query
 
     '___Neo4jObserveRemoved': () ->
       return "MATCH (n#{@__labels} {_id: {_id}}) DELETE n"
